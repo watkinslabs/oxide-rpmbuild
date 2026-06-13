@@ -360,7 +360,7 @@ fn tc_path_export() -> String {
     let ccarm = vr.join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc");
     let ccx86 = vr.join("cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc");
     format!(
-        "SYS={topdir}/sysroot/%{{_target_cpu}}\n\
+        "SYS={topdir}/sysroot/%{{name}}/%{{_target_cpu}}\n\
          if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
          else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
          export CC CROSS PATH=\"$SYS/usr/bin:$TCBIN:$PATH\"\n\
@@ -381,7 +381,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
     let cc_arm = vr.join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc");
     // SYS = per-arch sysroot where build_requires deps are installed; build against it.
     let preamble = format!(
-        "SYS={topdir}/sysroot/%{{_target_cpu}}\n\
+        "SYS={topdir}/sysroot/%{{name}}/%{{_target_cpu}}\n\
          if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
          else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
          UAPI=\"\"\n\
@@ -566,14 +566,19 @@ pub(crate) fn build(conn: &Connection, key: &str, arches: &[String]) -> Result<(
         // populate the per-arch sysroot with build_requires deps (Fedora: dnf-install
         // BuildRequires into the mock chroot). Each dep's built RPM is unpacked into the
         // sysroot so this package's %build finds its headers/libs at $SYS/usr/{include,lib}.
+        // per-package sysroot: topdir/sysroot/<key>/<arch> — isolated so concurrent builds
+        // sharing a dep (e.g. ncurses) don't clobber each other's staging. Cleared fresh.
+        let sys = tree::topdir().join("sysroot").join(key).join(arch); // matches spec SYS=.../sysroot/%{name}/%{_target_cpu}
+        if !m.build_requires.is_empty() {
+            let _ = fs::remove_dir_all(&sys);
+            fs::create_dir_all(&sys).map_err(|e| format!("vendorctl: mkdir sysroot: {e}"))?;
+        }
         for dep in m.build_requires.split_whitespace() {
             let dm = resolve(conn, dep)?;
             let dep_rpm = tree::rpms().join(arch).join(format!("{dep}-{}-1.ox1.{arch}.rpm", dm.version));
             if !dep_rpm.is_file() {
                 return Err(format!("vendorctl: build-dep {dep} not built for {arch} (build it first)"));
             }
-            let sys = tree::sysroot(arch);
-            fs::create_dir_all(&sys).map_err(|e| format!("vendorctl: mkdir sysroot: {e}"))?;
             let st = Command::new("sh").arg("-c")
                 .arg(format!("rpm2cpio '{}' | cpio -idmu --quiet -D '{}'", dep_rpm.display(), sys.display()))
                 .status().map_err(|e| format!("vendorctl: sysroot install {dep}: {e}"))?;

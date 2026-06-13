@@ -2,18 +2,18 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           libevent
-Version:        2.1.12
+Name:           less
+Version:        643
 Release:        1%{?dist}
-Summary:        libevent (oxide)
-License:        BSD-3-Clause
-Source0:        libevent-2.1.12.tar.gz
+Summary:        less pager (oxide)
+License:        GPL-3.0-or-later
+Source0:        less-643.tar.gz
 
 %description
-libevent (oxide)
+less pager (oxide)
 
 %prep
-%setup -q -n libevent-2.1.12-stable
+%setup -q -n less-643
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
@@ -25,10 +25,10 @@ export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+CFLAGS="-Os -D_GNU_SOURCE  -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
 LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-openssl --disable-samples --disable-debug-mode
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --with-regex=posix
 make %{?_smp_mflags}
 
 %install
@@ -39,9 +39,9 @@ unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/libevent.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/less.files
 
-%files -f %{_builddir}/libevent.files
+%files -f %{_builddir}/less.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 2.1.12-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 643-1
 - Generated oxide spec (autotools family).
