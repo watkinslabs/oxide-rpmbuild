@@ -81,6 +81,11 @@ pub(crate) fn open(db_path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent).map_err(|e| format!("vendorctl: mkdir {}: {e}", parent.display()))?;
     }
     let conn = Connection::open(db_path).map_err(|e| format!("vendorctl: open {}: {e}", db_path.display()))?;
+    // parallel builds: many vendorctl processes write build_results concurrently. WAL +
+    // a generous busy_timeout let them serialize gracefully instead of "database locked".
+    conn.busy_timeout(std::time::Duration::from_secs(60))
+        .map_err(|e| format!("vendorctl: busy_timeout: {e}"))?;
+    let _ = conn.pragma_update(None, "journal_mode", "WAL");
     conn.execute_batch(include_str!("../schema.sql"))
         .map_err(|e| format!("vendorctl: init schema: {e}"))?;
     // migrations for dbs created before a column existed (ignore "duplicate column").

@@ -19,8 +19,9 @@
 uapi_cflags() {
   case "$1" in
     x86_64|x86)
-      _H=/tmp/musl-uapi-x86
-      rm -rf "$_H"; mkdir -p "$_H"
+      # unique dir per invocation — a fixed /tmp path races under parallel builds
+      # (one build's rm -rf wipes another's staged headers mid-compile).
+      _H=$(mktemp -d "${TMPDIR:-/tmp}/musl-uapi-x86.XXXXXX")
       for _d in linux asm asm-generic mtd scsi sound rdma xen misc; do
         cp -rL "/usr/include/$_d" "$_H/$_d" 2>/dev/null || true
       done

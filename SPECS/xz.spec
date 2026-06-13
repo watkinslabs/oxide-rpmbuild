@@ -13,26 +13,27 @@ Source0:        %{name}-%{version}.tar.gz
 XZ Utils (static-musl, oxide)
 
 %prep
-%setup -q
+%setup -q -n xz-5.6.3
 
 %build
 . /home/nd/oxide/rpmbuild/lib/uapi-stage.sh
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; UAPI="$(uapi_cflags aarch64)"; else CC=musl-gcc; UAPI="$(uapi_cflags x86_64)"; fi
+[ -f Makefile ] && make distclean >/dev/null 2>&1 || true
+find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
-CFLAGS="-Os -D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
+CFLAGS="-Os -D_GNU_SOURCE  -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
 LDFLAGS="-static" \
 ./configure --host=%{_target_cpu}-linux-musl --disable-nls --disable-shared --enable-static --disable-doc --disable-scripts --disable-lzma-links --prefix=/usr
 make %{?_smp_mflags}
 
 %install
-rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/bin
-install -m0755 src/xz/xz %{buildroot}/usr/bin/xz
+make install DESTDIR=%{buildroot} INSTALL='install -p'
+rm -f %{buildroot}%{_infodir}/dir
+find %{buildroot} -name '*.la' -delete 2>/dev/null || true
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/xz.files
 
-%files
-/usr/bin/xz
-
+%files -f %{_builddir}/xz.files
 %changelog
 * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 5.6.3-1
 - Generated oxide spec (autotools family).

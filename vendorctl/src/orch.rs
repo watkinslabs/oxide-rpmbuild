@@ -188,20 +188,41 @@ fn install_block(items: &[Install]) -> String {
     s
 }
 
-fn files_block(items: &[Install]) -> String {
-    let mut s = String::new();
-    for it in items {
-        if it.kind == "tree" { s.push_str(&format!("{}/*\n", it.dest)); }
-        else { s.push_str(&format!("{}\n", it.dest)); }
-    }
-    s
-}
+// Best-effort capture of cargo-generated man pages + shell completions from the build
+// OUT_DIR (build.rs emits them there). Globbed because crate naming varies.
+const CARGO_EXTRAS: &str = "\
+B=target/%{_target_cpu}-unknown-linux-musl/release/build\n\
+find $B -path '*/out/*' -name '*.1' 2>/dev/null | while read f; do install -Dm644 \"$f\" %{buildroot}%{_mandir}/man1/\"$(basename \"$f\")\"; done\n\
+find $B -path '*/out/*' \\( -name '*.bash' -o -name '*.bash-completion' \\) 2>/dev/null | while read f; do n=$(basename \"$f\"); n=${n%.bash}; n=${n%.bash-completion}; install -Dm644 \"$f\" %{buildroot}%{_datadir}/bash-completion/completions/\"$n\"; done\n\
+find $B -path '*/out/*' -name '_*' 2>/dev/null | while read f; do install -Dm644 \"$f\" %{buildroot}%{_datadir}/zsh/site-functions/\"$(basename \"$f\")\"; done\n\
+find $B -path '*/out/*' -name '*.fish' 2>/dev/null | while read f; do install -Dm644 \"$f\" %{buildroot}%{_datadir}/fish/vendor_completions.d/\"$(basename \"$f\")\"; done\n";
 
 // `spec gen`: render SPECS/<key>.spec.
 pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
     let m = resolve(conn, key)?;
     let items = installs(conn, m.id)?;
-    if items.is_empty() { return Err(format!("vendorctl: no install_map for {key} (add with `install add`)")); }
+    // autotools: run upstream `make install` — captures bin + man + info + locale + all
+    // links/extra binaries (gawk->awk, gzip->gunzip/zcat, coreutils applets, …). %files is
+    // auto-generated from whatever actually landed, so nothing upstream ships is dropped.
+    // cargo/plain-make: explicit install_map (cargo man/completions are a per-pkg follow-up).
+    let (install, files_section) = if m.build_system == "autotools" {
+        let inst = format!(
+            "make install DESTDIR=%{{buildroot}} INSTALL='install -p'\n\
+             rm -f %{{buildroot}}%{{_infodir}}/dir\n\
+             find %{{buildroot}} -name '*.la' -delete 2>/dev/null || true\n\
+             ( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n");
+        (inst, format!("%files -f %{{_builddir}}/{key}.files"))
+    } else {
+        if items.is_empty() { return Err(format!("vendorctl: no install_map for {key} (add with `install add`)")); }
+        let mut inst = install_block(&items);
+        // cargo: rust tools emit man pages + shell completions into the build OUT_DIR.
+        // Names/locations vary per crate, so glob best-effort and place at standard paths.
+        if m.build_system == "cargo" { inst.push_str(CARGO_EXTRAS); }
+        // auto-filelist: package exactly what landed in buildroot (bins, links, man, completions).
+        inst.push_str(&format!(
+            "( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n"));
+        (inst, format!("%files -f %{{_builddir}}/{key}.files"))
+    };
     let summary = if m.summary.is_empty() { format!("{key} (static-musl, oxide)") } else { m.summary.clone() };
     let license = if m.license.is_empty() { "Unknown".into() } else { m.license.clone() };
     let url = if m.upstream_url.is_empty() { String::new() } else { format!("URL:            {}\n", m.upstream_url) };
@@ -222,12 +243,12 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
          %prep\n{prep}\n\n\
          %build\n{build}\n\
          %install\n{install}\n\
-         %files\n{files}\n\
+         {files_section}\n\
          %changelog\n\
          * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - {ver}-1\n\
          - Generated oxide spec ({bs} family).\n",
         bs = m.build_system, key = key, ver = m.version, summary = summary, license = license,
-        url = url, prep = prep, build = build_block(&m)?, install = install_block(&items), files = files_block(&items));
+        url = url, prep = prep, build = build_block(&m)?, install = install, files_section = files_section);
     fs::create_dir_all(tree::specs()).map_err(|e| format!("vendorctl: mkdir SPECS: {e}"))?;
     let path = tree::specs().join(format!("{key}.spec"));
     fs::write(&path, spec).map_err(|e| format!("vendorctl: write {}: {e}", path.display()))?;

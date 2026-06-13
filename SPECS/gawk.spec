@@ -13,11 +13,13 @@ Source0:        %{name}-%{version}.tar.gz
 GNU awk (static-musl, oxide)
 
 %prep
-%setup -q
+%setup -q -n gawk-5.3.1
 
 %build
 . /home/nd/oxide/rpmbuild/lib/uapi-stage.sh
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; UAPI="$(uapi_cflags aarch64)"; else CC=musl-gcc; UAPI="$(uapi_cflags x86_64)"; fi
+[ -f Makefile ] && make distclean >/dev/null 2>&1 || true
+find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
 CFLAGS="-Os -D_GNU_SOURCE -std=gnu11 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
@@ -26,16 +28,12 @@ LDFLAGS="-static" \
 make %{?_smp_mflags}
 
 %install
-rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/bin
-install -m0755 gawk %{buildroot}/usr/bin/gawk
-mkdir -p %{buildroot}/usr/bin
-ln %{buildroot}/usr/bin/gawk %{buildroot}/usr/bin/awk
+make install DESTDIR=%{buildroot} INSTALL='install -p'
+rm -f %{buildroot}%{_infodir}/dir
+find %{buildroot} -name '*.la' -delete 2>/dev/null || true
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/gawk.files
 
-%files
-/usr/bin/gawk
-/usr/bin/awk
-
+%files -f %{_builddir}/gawk.files
 %changelog
 * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 5.3.1-1
 - Generated oxide spec (autotools family).

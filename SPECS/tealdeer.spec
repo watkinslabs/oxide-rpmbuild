@@ -25,10 +25,14 @@ RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target $TGT
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/bin
 install -m0755 target/%{_target_cpu}-unknown-linux-musl/release/tldr %{buildroot}/usr/bin/tldr
+B=target/%{_target_cpu}-unknown-linux-musl/release/build
+find $B -path '*/out/*' -name '*.1' 2>/dev/null | while read f; do install -Dm644 "$f" %{buildroot}%{_mandir}/man1/"$(basename "$f")"; done
+find $B -path '*/out/*' \( -name '*.bash' -o -name '*.bash-completion' \) 2>/dev/null | while read f; do n=$(basename "$f"); n=${n%.bash}; n=${n%.bash-completion}; install -Dm644 "$f" %{buildroot}%{_datadir}/bash-completion/completions/"$n"; done
+find $B -path '*/out/*' -name '_*' 2>/dev/null | while read f; do install -Dm644 "$f" %{buildroot}%{_datadir}/zsh/site-functions/"$(basename "$f")"; done
+find $B -path '*/out/*' -name '*.fish' 2>/dev/null | while read f; do install -Dm644 "$f" %{buildroot}%{_datadir}/fish/vendor_completions.d/"$(basename "$f")"; done
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/tealdeer.files
 
-%files
-/usr/bin/tldr
-
+%files -f %{_builddir}/tealdeer.files
 %changelog
 * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.7.1-1
 - Generated oxide spec (cargo family).

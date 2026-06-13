@@ -13,26 +13,27 @@ Source0:        %{name}-%{version}.tar.gz
 GNU tar (static-musl, oxide)
 
 %prep
-%setup -q
+%setup -q -n tar-1.35
 
 %build
 . /home/nd/oxide/rpmbuild/lib/uapi-stage.sh
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; UAPI="$(uapi_cflags aarch64)"; else CC=musl-gcc; UAPI="$(uapi_cflags x86_64)"; fi
+[ -f Makefile ] && make distclean >/dev/null 2>&1 || true
+find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
-CFLAGS="-Os -D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
+CFLAGS="-Os -D_GNU_SOURCE  -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
 LDFLAGS="-static" \
 ./configure --host=%{_target_cpu}-linux-musl --disable-nls --disable-acl --disable-xattr --without-selinux --without-posix-acls --prefix=/usr
 make %{?_smp_mflags}
 
 %install
-rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/bin
-install -m0755 src/tar %{buildroot}/usr/bin/tar
+make install DESTDIR=%{buildroot} INSTALL='install -p'
+rm -f %{buildroot}%{_infodir}/dir
+find %{buildroot} -name '*.la' -delete 2>/dev/null || true
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/tar.files
 
-%files
-/usr/bin/tar
-
+%files -f %{_builddir}/tar.files
 %changelog
 * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.35-1
 - Generated oxide spec (autotools family).

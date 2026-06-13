@@ -14,12 +14,13 @@ Source0:        %{name}-%{version}.tar.gz
 Block-sorting file compressor (static-musl, oxide)
 
 %prep
-%setup -q
+%setup -q -n bzip2-1.0.8
 
 %build
 . /home/nd/oxide/rpmbuild/lib/uapi-stage.sh
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; UAPI="$(uapi_cflags aarch64)"; else CC=musl-gcc; UAPI="$(uapi_cflags x86_64)"; fi
 export CC UAPI
+OXIDE_CFLAGS=""; export OXIDE_CFLAGS
 for s in blocksort huffman crctable randtable compress decompress bzlib; do "$CC" -c -Os -D_FILE_OFFSET_BITS=64 "$s.c"; done
 "$CC" -static -Os -D_FILE_OFFSET_BITS=64 -o bzip2 blocksort.o huffman.o crctable.o randtable.o compress.o decompress.o bzlib.o bzip2.c
 
@@ -31,12 +32,9 @@ mkdir -p %{buildroot}/usr/bin
 ln -s bzip2 %{buildroot}/usr/bin/bunzip2
 mkdir -p %{buildroot}/usr/bin
 ln -s bzip2 %{buildroot}/usr/bin/bzcat
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/bzip2.files
 
-%files
-/usr/bin/bzip2
-/usr/bin/bunzip2
-/usr/bin/bzcat
-
+%files -f %{_builddir}/bzip2.files
 %changelog
 * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.0.8-1
 - Generated oxide spec (plain-make family).

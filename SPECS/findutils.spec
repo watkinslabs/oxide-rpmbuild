@@ -13,7 +13,7 @@ Source0:        %{name}-%{version}.tar.gz
 GNU findutils (static-musl, oxide)
 
 %prep
-%setup -q
+%setup -q -n findutils-4.10.0
 
 %build
 . /home/nd/oxide/rpmbuild/lib/uapi-stage.sh
@@ -28,16 +28,12 @@ LDFLAGS="-static" \
 make %{?_smp_mflags}
 
 %install
-rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/bin
-install -m0755 find/find %{buildroot}/usr/bin/find
-mkdir -p %{buildroot}/usr/bin
-install -m0755 xargs/xargs %{buildroot}/usr/bin/xargs
+make install DESTDIR=%{buildroot} INSTALL='install -p'
+rm -f %{buildroot}%{_infodir}/dir
+find %{buildroot} -name '*.la' -delete 2>/dev/null || true
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/findutils.files
 
-%files
-/usr/bin/find
-/usr/bin/xargs
-
+%files -f %{_builddir}/findutils.files
 %changelog
 * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 4.10.0-1
 - Generated oxide spec (autotools family).
