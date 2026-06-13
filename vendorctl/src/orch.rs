@@ -88,6 +88,46 @@ pub(crate) fn stage(conn: &Connection, key: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) struct Src { pub url: String, pub filename: String, pub checksum: String }
+
+pub(crate) fn source_for(conn: &Connection, ver_id: i64) -> Result<Option<Src>, String> {
+    conn.query_row(
+        "SELECT canonical_url, filename, checksum_value FROM sources WHERE package_version_id=?1 ORDER BY id LIMIT 1",
+        params![ver_id],
+        |r| Ok(Src { url: r.get(0)?, filename: r.get(1)?, checksum: r.get(2)? }),
+    ).optional().map_err(|e| format!("vendorctl: query source: {e}"))
+}
+
+fn sha256_of(path: &Path) -> Result<String, String> {
+    let out = Command::new("sha256sum").arg(path).output().map_err(|e| format!("vendorctl: sha256sum: {e}"))?;
+    Ok(String::from_utf8_lossy(&out.stdout).split_whitespace().next().unwrap_or("").to_string())
+}
+
+// `src fetch`: download canonical_url -> SOURCES/<filename>, verify (or record) sha256.
+// Enables distributed builds — a fresh instance needs only the repo + network, no local vendor tree.
+pub(crate) fn fetch(conn: &Connection, key: &str) -> Result<(), String> {
+    let m = resolve(conn, key)?;
+    let s = source_for(conn, m.id)?.filter(|s| !s.url.is_empty())
+        .ok_or_else(|| format!("vendorctl: no source URL for {key} (add with `src add --url ...`)"))?;
+    let fname = if s.filename.is_empty() { format!("{key}-{}.tar.gz", m.version) } else { s.filename.clone() };
+    fs::create_dir_all(tree::sources()).map_err(|e| format!("vendorctl: mkdir SOURCES: {e}"))?;
+    let out = tree::sources().join(&fname);
+    let st = Command::new("curl").args(["-fsSL", "--retry", "3", "-o", out.to_str().unwrap(), &s.url])
+        .status().map_err(|e| format!("vendorctl: curl: {e}"))?;
+    if !st.success() { return Err(format!("vendorctl: download failed: {}", s.url)); }
+    let sha = sha256_of(&out)?;
+    if s.checksum.is_empty() {
+        conn.execute("UPDATE sources SET checksum_value=?1, checksum_type='sha256' WHERE package_version_id=?2 AND canonical_url=?3",
+            params![sha, m.id, s.url]).map_err(|e| format!("vendorctl: record checksum: {e}"))?;
+        println!("fetched\t{}\tsha256:{sha} (recorded)", out.display());
+    } else if s.checksum != sha {
+        return Err(format!("vendorctl: CHECKSUM MISMATCH for {key}: expected {} got {sha}", s.checksum));
+    } else {
+        println!("fetched\t{}\tsha256 verified", out.display());
+    }
+    Ok(())
+}
+
 fn cross_cc() -> String {
     tree::vendor_root()
         .join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc")
@@ -223,6 +263,12 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
             "( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n"));
         (inst, format!("%files -f %{{_builddir}}/{key}.files"))
     };
+    // Source0 = upstream tarball filename if a source URL is registered (rpm %setup handles
+    // any compression); else the local-stage default. %setup -n still pins the unpacked dir.
+    let src0 = match source_for(conn, m.id)? {
+        Some(s) if !s.filename.is_empty() => s.filename,
+        _ => format!("{key}-{}.tar.gz", m.version),
+    };
     let summary = if m.summary.is_empty() { format!("{key} (static-musl, oxide)") } else { m.summary.clone() };
     let license = if m.license.is_empty() { "Unknown".into() } else { m.license.clone() };
     let url = if m.upstream_url.is_empty() { String::new() } else { format!("URL:            {}\n", m.upstream_url) };
@@ -238,7 +284,7 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
          Summary:        {summary}\n\
          License:        {license}\n\
          {url}\
-         Source0:        %{{name}}-%{{version}}.tar.gz\n\n\
+         Source0:        {src0}\n\n\
          %description\n{summary}\n\n\
          %prep\n{prep}\n\n\
          %build\n{build}\n\
@@ -248,7 +294,7 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
          * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - {ver}-1\n\
          - Generated oxide spec ({bs} family).\n",
         bs = m.build_system, key = key, ver = m.version, summary = summary, license = license,
-        url = url, prep = prep, build = build_block(&m)?, install = install, files_section = files_section);
+        url = url, src0 = src0, prep = prep, build = build_block(&m)?, install = install, files_section = files_section);
     fs::create_dir_all(tree::specs()).map_err(|e| format!("vendorctl: mkdir SPECS: {e}"))?;
     let path = tree::specs().join(format!("{key}.spec"));
     fs::write(&path, spec).map_err(|e| format!("vendorctl: write {}: {e}", path.display()))?;

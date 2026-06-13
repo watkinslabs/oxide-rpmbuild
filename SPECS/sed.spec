@@ -7,7 +7,7 @@ Version:        4.9
 Release:        1%{?dist}
 Summary:        GNU sed (static-musl, oxide)
 License:        GPL-3.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        sed-4.9.tar.xz
 
 %description
 GNU sed (static-musl, oxide)

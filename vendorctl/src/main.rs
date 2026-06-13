@@ -258,8 +258,9 @@ fn cmd_ver(conn: &Connection, args: &[String]) -> Result<(), String> {
 }
 
 fn cmd_src(conn: &Connection, args: &[String]) -> Result<(), String> {
-    let sub = req_sub(args, "src <add|list|update|delete>")?;
+    let sub = req_sub(args, "src <add|list|update|delete|fetch>")?;
     match sub {
+        "fetch" => return orch::fetch(conn, req_pos(args, 1, "src fetch <pkg>")?),
         "add" => {
             let row = source_from_args(args, true)?;
             db::add_source(conn, &row)?;

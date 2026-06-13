@@ -7,7 +7,7 @@ Version:        10.2.0
 Release:        1%{?dist}
 Summary:        fd: fast find alternative (static-musl, oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        fd-10.2.0.tar.gz
 
 %description
 fd: fast find alternative (static-musl, oxide)
