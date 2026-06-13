@@ -410,7 +410,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              find . \\( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \\) -delete 2>/dev/null || true\n\
              {cache_write}\
              CC=\"$CC\" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD=\"\" \\\n\
-             CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
+             CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE {cf} -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
              CFLAGS=\"-Os -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
              LDFLAGS=\"-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
              PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\" \\\n\
