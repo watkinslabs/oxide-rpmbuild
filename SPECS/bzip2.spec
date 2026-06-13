@@ -18,10 +18,10 @@ Block-sorting file compressor (static-musl, oxide)
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 UAPI=""
-export AR="${CROSS}ar" RANLIB="${CROSS}ranlib" NM="${CROSS}nm" STRIP="${CROSS}strip"
-export C_INCLUDE_PATH="$SYS/usr/include" CPLUS_INCLUDE_PATH="$SYS/usr/include" LIBRARY_PATH="$SYS/usr/lib"
+export PATH="$TCBIN:$PATH"
+export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 export CC UAPI
 OXIDE_CFLAGS=""; export OXIDE_CFLAGS
 for s in blocksort huffman crctable randtable compress decompress bzlib; do "$CC" -c -Os -D_FILE_OFFSET_BITS=64 "$s.c"; done

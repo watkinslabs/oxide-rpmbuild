@@ -89,9 +89,26 @@ pub(crate) fn plan(conn: &Connection, targets: &[String]) -> Result<(), String> 
     for (i, k) in order.iter().enumerate() {
         let m = resolve(conn, k)?;
         let br = if m.build_requires.is_empty() { "-".to_string() } else { m.build_requires.clone() };
-        println!("{:>3}  {:<14} [{}]  needs: {br}", i + 1, k, m.build_system);
+        println!("{:>3}  {:<14} [{:<10}] tc:{:<16} needs: {br}", i + 1, k, m.build_system, toolchains_of(&m));
     }
     println!("-- {} packages, dependency-ordered --", order.len());
+    Ok(())
+}
+
+// `toolchains [pkg...]`: per-package compiler/toolchain requirements + a distinct summary.
+pub(crate) fn toolchains(conn: &Connection, targets: &[String]) -> Result<(), String> {
+    let keys: Vec<String> = if targets.is_empty() { all_enabled(conn)? } else { closure(conn, targets)? };
+    let mut all: HashMap<String, usize> = HashMap::new();
+    for k in &keys {
+        let m = resolve(conn, k)?;
+        let tc = toolchains_of(&m);
+        println!("{:<14} {tc}", k);
+        for t in tc.split_whitespace() { *all.entry(t.to_string()).or_default() += 1; }
+    }
+    let mut summary: Vec<(String, usize)> = all.into_iter().collect();
+    summary.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let parts: Vec<String> = summary.iter().map(|(t, n)| format!("{t}={n}")).collect();
+    println!("-- toolchains needed across {} pkgs: {} --", keys.len(), parts.join(" "));
     Ok(())
 }
 
@@ -191,6 +208,18 @@ pub(crate) struct VerMeta {
     pub ldflags: String,
     pub install_cmd: String,
     pub build_requires: String,
+    pub toolchains: String,
+}
+
+// Toolchains a package needs — explicit if set, else derived from its build-system family.
+pub(crate) fn toolchains_of(m: &VerMeta) -> String {
+    if !m.toolchains.is_empty() { return m.toolchains.clone(); }
+    match m.build_system.as_str() {
+        "cargo" => "rust c".into(),       // rust + cross cc for C deps (onig/jemalloc)
+        "go" => "go".into(),
+        "meson" => "c c++ meson python".into(),
+        _ => "c".into(),                  // autotools / script / plain-make
+    }
 }
 
 pub(crate) struct Install {
@@ -204,14 +233,14 @@ pub(crate) struct Install {
 // Resolve the build-target version (most recently added) for a package.
 pub(crate) fn resolve(conn: &Connection, key: &str) -> Result<VerMeta, String> {
     conn.query_row(
-        "SELECT id, version, build_system, summary, license, upstream_url, src_subdir, build_args, cflags, config_cache, ldflags, install_cmd, build_requires \
+        "SELECT id, version, build_system, summary, license, upstream_url, src_subdir, build_args, cflags, config_cache, ldflags, install_cmd, build_requires, toolchains \
          FROM package_versions WHERE package_key=?1 ORDER BY id DESC LIMIT 1",
         params![key],
         |r| Ok(VerMeta {
             id: r.get(0)?, version: r.get(1)?, build_system: r.get(2)?, summary: r.get(3)?,
             license: r.get(4)?, upstream_url: r.get(5)?, src_subdir: r.get(6)?, build_args: r.get(7)?,
             cflags: r.get(8)?, config_cache: r.get(9)?, ldflags: r.get(10)?,
-            install_cmd: r.get(11)?, build_requires: r.get(12)?,
+            install_cmd: r.get(11)?, build_requires: r.get(12)?, toolchains: r.get(13)?,
         }),
     )
     .optional()

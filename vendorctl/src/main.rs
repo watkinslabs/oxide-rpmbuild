@@ -50,6 +50,7 @@ fn run() -> Result<(), String> {
         "build" => orch::build(&conn, req_pos(&args, 1, "build <pkg> [--arch x86_64|aarch64|both]")?, &arch_list(&args)),
         "plan" => orch::plan(&conn, &pkg_args(&args[1..])),
         "graph" => orch::graph(&conn, &pkg_args(&args[1..])),
+        "toolchains" => orch::toolchains(&conn, &pkg_args(&args[1..])),
         "build-all" => orch::build_all(&conn, &arch_list(&args), &pkg_args(&args[1..])),
         "publish" => orch::create_repo(),
         "all" => {
@@ -103,6 +104,7 @@ fn cmd_meta(conn: &Connection, args: &[String]) -> Result<(), String> {
         ("ldflags", parse_flag(args, "--ldflags")),
         ("install_cmd", parse_flag(args, "--install-cmd")),
         ("build_requires", parse_flag(args, "--build-requires")),
+        ("toolchains", parse_flag(args, "--toolchains")),
     ];
     for (col, val) in upd {
         if let Some(v) = val {

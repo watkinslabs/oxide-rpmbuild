@@ -17,10 +17,10 @@ GNU coreutils (static-musl, oxide)
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 UAPI=""
-export AR="${CROSS}ar" RANLIB="${CROSS}ranlib" NM="${CROSS}nm" STRIP="${CROSS}strip"
-export C_INCLUDE_PATH="$SYS/usr/include" CPLUS_INCLUDE_PATH="$SYS/usr/include" LIBRARY_PATH="$SYS/usr/lib"
+export PATH="$TCBIN:$PATH"
+export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 cat > config.cache <<'OXEOF'
@@ -34,11 +34,11 @@ CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompat
 CFLAGS="-Os -D_GNU_SOURCE -DO_BINARY=0 -DO_TEXT=0 -DS_IXUGO='(S_IXUSR|S_IXGRP|S_IXOTH)' -DS_IRWXUGO='(S_IRWXU|S_IRWXG|S_IRWXO)' -DSYS_getdents=SYS_getdents64 -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
 LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-LD_LIBRARY_PATH="$SYS/usr/lib" \
 ./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --cache-file=config.cache --enable-single-binary=symlinks --enable-no-install-program=stdbuf,arch,hostname --disable-nls --disable-libsmack --disable-libcap --disable-acl --disable-xattr --without-selinux --without-openssl --prefix=/usr
 make %{?_smp_mflags}
 
 %install
+if [ "%{_target_cpu}" = "aarch64" ]; then export PATH=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin:$PATH; else export PATH=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin:$PATH; fi
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true

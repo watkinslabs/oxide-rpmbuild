@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS package_versions (
     ldflags         TEXT NOT NULL DEFAULT '',            -- extra LDFLAGS (e.g. -L<dep>/lib for shared lib deps)
     install_cmd     TEXT NOT NULL DEFAULT '',            -- override %install build step (e.g. openssl 'make install_sw DESTDIR=...')
     build_requires  TEXT NOT NULL DEFAULT '',            -- space-sep lib pkg keys installed into the sysroot before build (Fedora BuildRequires)
+    toolchains      TEXT NOT NULL DEFAULT '',            -- compilers/toolchains needed: c c++ rust go python meson (auto-derived from build_system if empty)
     UNIQUE(package_key, version, revision),
     FOREIGN KEY(package_key) REFERENCES packages(key) ON DELETE CASCADE
 );

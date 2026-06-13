@@ -32,6 +32,7 @@ PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
 make %{?_smp_mflags}
 
 %install
+if [ "%{_target_cpu}" = "aarch64" ]; then export PATH=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin:$PATH; else export PATH=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin:$PATH; fi
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
