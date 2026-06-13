@@ -1,0 +1,9 @@
+%_topdir        /home/nd/oxide/rpmbuild
+%dist           .ox1
+%vendor_root    /home/nd/oxide/oxide2/vendor
+# oxide cross targets; build.sh logic in %build keys off %{_target_cpu}
+%__os_install_post %{nil}
+%_build_id_links none
+# GPG signing: rsa4096/2B3D90B0E4C5E7F2, pubkey at RPMS/RPM-GPG-KEY-oxide.
+# vendorctl auto-signs RPMs (rpm --addsign) + repomd.xml (gpg --detach-sign).
+%_gpg_name      2B3D90B0E4C5E7F2

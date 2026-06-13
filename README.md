@@ -96,9 +96,13 @@ Public key: `RPMS/RPM-GPG-KEY-oxide` — consumers `rpm --import` it.
 ## Status / TODO
 
 - [x] tree + `.ox1` macros + vendorctl + lib
-- [x] from-source pipeline proven both arches (bzip2 plain-make, sed autotools)
+- [x] from-source pipeline proven both arches (bzip2 plain-make + sed autotools)
 - [x] `createrepo_c` repo + GPG signing (RPM + SRPM + repomd) verified end-to-end
 - [x] vendorctl orchestrator: catalog → stage → spec gen → build → sign → publish
-- [ ] populate catalog for remaining ~88 packages (cargo/go/meson `%build` templates need toolchain wiring)
-- [ ] coreutils applet hardlinks, lib-tree `-devel` packages
-- [ ] migrate multi-binary path tables (util-linux, shadow, procps-ng, iproute2, openssh) from `rootfs.rs`
+- [x] autotools GNU cluster: grep tar make gawk gzip xz patch diffutils findutils — **both arches**, signed, in repo (11 pkgs/arch incl. bzip2+sed); registered via `register-autotools.sh`
+- [x] per-package `cflags` field (`-std=gnu89/gnu11`); autotools `%build` cleans stale `*.o/*.a` (vendor source trees are dirty — tarballs carry prior-build artifacts)
+- [ ] **pristine source tarballs** — currently tarred from dirty vendor trees; `%build` deletes stale objects as a workaround. Better: stage from clean upstream.
+- [ ] **`export`/`import` round-trip** the orchestration columns (build_system/cflags/install_map/build_results) so `catalog.json` is a complete source of truth (today: `register-*.sh` is the catalog source)
+- [ ] cargo/go/meson `%build` templates (toolchain wiring) for the Rust/Go/meson packages
+- [ ] coreutils applet hardlinks (~120), lib-tree `-devel` packages
+- [ ] multi-binary path tables (util-linux, shadow, procps-ng, iproute2, openssh) from `rootfs.rs`

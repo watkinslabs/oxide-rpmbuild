@@ -1,0 +1,40 @@
+# oxide rpmbuild tree — check in the build SYSTEM, ignore generated ARTIFACTS.
+#
+# Checked in (source of truth):
+#   SPECS/*.spec            generated recipes (reviewable; rpmbuild input)
+#   vendorctl/ (src etc.)   the orchestrator
+#   lib/                    shared build glue
+#   .rpmmacros-oxide        topdir + dist + signing macros
+#   register-*.sh           catalog source: repopulate catalog.db (until export/import
+#                           round-trips the orchestration columns — see README TODO)
+#   RPMS/RPM-GPG-KEY-oxide   public signing key (consumers import this)
+#   README.md
+
+# --- rpmbuild scratch (regenerated every build) ---
+/BUILD/
+/BUILDROOT/
+
+# --- built artifacts (published to the repo store, not git) ---
+/RPMS/**/*.rpm
+/SRPMS/
+# createrepo_c output + temp
+/RPMS/**/repodata/
+/RPMS/**/.repodata/
+
+# --- large upstream sources (regenerate via `vendorctl src stage <pkg>`) ---
+/SOURCES/*.tar.*
+/SOURCES/*.tgz
+/SOURCES/*.zip
+
+# --- sqlite runtime (regenerate from catalog.json) ---
+/catalog.db
+/catalog.db-shm
+/catalog.db-wal
+
+# --- rust build dir ---
+/vendorctl/target/
+
+# editor / os cruft
+*.swp
+*~
+.DS_Store
