@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS package_versions (
     src_subdir      TEXT NOT NULL DEFAULT '',            -- vendor/<key>/<src_subdir> (defaults <key>-<version>)
     build_args      TEXT NOT NULL DEFAULT '',            -- family-specific: configure flags / cargo args / make snippet
     cflags          TEXT NOT NULL DEFAULT '',            -- extra CFLAGS injected by %build (e.g. -std=gnu89)
+    config_cache    TEXT NOT NULL DEFAULT '',            -- autotools cross config.cache (ac_cv_* run-test answers)
     UNIQUE(package_key, version, revision),
     FOREIGN KEY(package_key) REFERENCES packages(key) ON DELETE CASCADE
 );
