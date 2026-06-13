@@ -165,6 +165,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
          if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; \
          else CC={ccx86}; CROSS={px86}; fi\n\
          UAPI=\"\"\n\
+         export AR=\"${{CROSS}}ar\" RANLIB=\"${{CROSS}}ranlib\" NM=\"${{CROSS}}nm\" STRIP=\"${{CROSS}}strip\"\n\
          export C_INCLUDE_PATH=\"$SYS/usr/include\" CPLUS_INCLUDE_PATH=\"$SYS/usr/include\" LIBRARY_PATH=\"$SYS/usr/lib\"\n",
         topdir = tree::topdir().display(),
         ccarm = cc_arm.display(), parm = cc_arm.display().to_string().trim_end_matches("gcc"),
@@ -192,7 +193,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              LDFLAGS=\"-Wl,-rpath,/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
              PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\" \\\n\
              LD_LIBRARY_PATH=\"$SYS/usr/lib\" \\\n\
-             ./configure --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
+             ./configure --build=x86_64-pc-linux-gnu --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
         },
         // custom build systems (zlib ./configure, openssl ./Configure): build_args is the full
