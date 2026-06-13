@@ -2,18 +2,18 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           libunistring
-Version:        1.2
+Name:           libgcrypt
+Version:        1.10.3
 Release:        1%{?dist}
-Summary:        libunistring -devel (oxide)
-License:        LGPL-3.0-or-later
-Source0:        libunistring-1.2.tar.gz
+Summary:        libgcrypt (oxide)
+License:        LGPL-2.1-or-later
+Source0:        libgcrypt-1.10.3.tar.bz2
 
 %description
-libunistring -devel (oxide)
+libgcrypt (oxide)
 
 %prep
-%setup -q -n libunistring-1.2
+%setup -q -n libgcrypt-1.10.3
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
@@ -26,9 +26,9 @@ find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
 CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
-LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib " \
+LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-rpath
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-doc --disable-asm --with-libgpg-error-prefix=$SYS/usr
 make %{?_smp_mflags}
 
 %install
@@ -39,9 +39,9 @@ unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/libunistring.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/libgcrypt.files
 
-%files -f %{_builddir}/libunistring.files
+%files -f %{_builddir}/libgcrypt.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.2-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.10.3-1
 - Generated oxide spec (autotools family).

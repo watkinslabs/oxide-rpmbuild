@@ -2,24 +2,24 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           libunistring
-Version:        1.2
+Name:           libevent
+Version:        2.1.12
 Release:        1%{?dist}
-Summary:        libunistring -devel (oxide)
-License:        LGPL-3.0-or-later
-Source0:        libunistring-1.2.tar.gz
+Summary:        libevent (oxide)
+License:        BSD-3-Clause
+Source0:        libevent-2.1.12.tar.gz
 
 %description
-libunistring -devel (oxide)
+libevent (oxide)
 
 %prep
-%setup -q -n libunistring-1.2
+%setup -q -n libevent-2.1.12-stable
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 UAPI=""
-export PATH="$SYS/usr/bin:$TCBIN:$PATH"
+export PATH="$TCBIN:$PATH"
 export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
@@ -28,20 +28,17 @@ CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompat
 CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
 LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-rpath
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-openssl --disable-samples --disable-debug-mode
 make %{?_smp_mflags}
 
 %install
-SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
-export CC CROSS PATH="$SYS/usr/bin:$TCBIN:$PATH"
-unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
+if [ "%{_target_cpu}" = "aarch64" ]; then export PATH=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin:$PATH; else export PATH=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin:$PATH; fi
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/libunistring.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/libevent.files
 
-%files -f %{_builddir}/libunistring.files
+%files -f %{_builddir}/libevent.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.2-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 2.1.12-1
 - Generated oxide spec (autotools family).

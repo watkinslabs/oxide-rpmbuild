@@ -351,13 +351,25 @@ fn sign_rpm(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// Per-arch toolchain PATH export — needed in %install too (libtool relink/strip at install
-// time needs the cross nm/strip on PATH; %install doesn't run the %build preamble).
+// Toolchain env for %install — install steps may relink/recompile (libtool, make-based
+// `make install`), so they need CC/CROSS + toolchain + sysroot bin on PATH, and rpm's
+// injected CFLAGS neutralized (else host gcc gets target hardening flags). %install does
+// NOT run the %build preamble, so set it here too.
 fn tc_path_export() -> String {
     let vr = tree::vendor_root();
-    format!("if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then export PATH={}:$PATH; else export PATH={}:$PATH; fi\n",
-        vr.join("cross/aarch64-linux-musl-cross/bin").display(),
-        vr.join("cross/x86_64-linux-musl-cross/bin").display())
+    let ccarm = vr.join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc");
+    let ccx86 = vr.join("cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc");
+    format!(
+        "SYS={topdir}/sysroot/%{{_target_cpu}}\n\
+         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
+         else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
+         export CC CROSS PATH=\"$SYS/usr/bin:$TCBIN:$PATH\"\n\
+         unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS\n",
+        topdir = tree::topdir().display(),
+        ccarm = ccarm.display(), parm = ccarm.display().to_string().trim_end_matches("gcc"),
+        armbin = ccarm.parent().unwrap().display(),
+        ccx86 = ccx86.display(), px86 = ccx86.display().to_string().trim_end_matches("gcc"),
+        x86bin = ccx86.parent().unwrap().display())
 }
 
 // %build block per build-system family.
@@ -373,7 +385,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
          if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
          else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
          UAPI=\"\"\n\
-         export PATH=\"$TCBIN:$PATH\"\n\
+         export PATH=\"$SYS/usr/bin:$TCBIN:$PATH\"\n\
          export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX=\"${{CROSS}}g++\"\n",
         topdir = tree::topdir().display(),
         ccarm = cc_arm.display(), parm = cc_arm.display().to_string().trim_end_matches("gcc"),
@@ -400,7 +412,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              CC=\"$CC\" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD=\"\" \\\n\
              CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
              CFLAGS=\"-Os -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
-             LDFLAGS=\"-Wl,-rpath,/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
+             LDFLAGS=\"-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
              PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\" \\\n\
              ./configure --build=x86_64-pc-linux-gnu --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
@@ -411,7 +423,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
             "{preamble}\
              export CC CROSS UAPI\n\
              export CFLAGS=\"-Os -fPIC {cf} -I$SYS/usr/include $UAPI\"\n\
-             export LDFLAGS=\"-Wl,-rpath,/usr/lib -L$SYS/usr/lib {lf}\"\n\
+             export LDFLAGS=\"-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\"\n\
              export PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\"\n\
              {b}\n"),
         "cargo" => format!(
