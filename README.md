@@ -12,7 +12,8 @@ Sibling repo of `oxide2` (kernel). Sources are *referenced* from
 
 ```
 rpmbuild/
-├── .rpmmacros-oxide     # %_topdir, %dist .ox1, %vendor_root
+# build macros (_topdir, .ox1 dist, _gpg_name) are CLI --defines in vendorctl orch.rs
+# (rpm --load is too late for build-path macros — must be --define)
 ├── SPECS/<pkg>.spec     # generated, one per package
 ├── SOURCES/<pkg>-<ver>.tar.gz   # top dir MUST be <pkg>-<ver>/ (else %setup fails)
 ├── BUILD/  BUILDROOT/    # rpmbuild scratch (per-pkg root, RPM 4.20 layout)

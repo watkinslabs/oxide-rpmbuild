@@ -4,7 +4,6 @@
 #   SPECS/*.spec            generated recipes (reviewable; rpmbuild input)
 #   vendorctl/ (src etc.)   the orchestrator
 #   lib/                    shared build glue
-#   .rpmmacros-oxide        topdir + dist + signing macros
 #   register-*.sh           catalog source: repopulate catalog.db (until export/import
 #                           round-trips the orchestration columns — see README TODO)
 #   RPMS/RPM-GPG-KEY-oxide   public signing key (consumers import this)

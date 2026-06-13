@@ -72,14 +72,6 @@ pub(crate) fn now_ts() -> i64 {
         .unwrap_or(0)
 }
 
-pub(crate) fn repo_root() -> Result<PathBuf, String> {
-    let start = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for p in start.ancestors() {
-        if p.join("Cargo.toml").is_file() && p.join("tools").is_dir() { return Ok(p.to_path_buf()); }
-    }
-    Err("vendorctl: repo root not found".into())
-}
-
 pub(crate) fn default_db_path() -> Result<PathBuf, String> {
     Ok(crate::tree::topdir().join("catalog.db"))
 }

@@ -242,6 +242,9 @@ pub(crate) fn build(conn: &Connection, key: &str, arches: &[String]) -> Result<(
     if !spec.is_file() { return Err(format!("vendorctl: {} missing (run `spec gen {key}`)", spec.display())); }
     let topdir = tree::topdir();
     for arch in arches {
+        // _topdir MUST be a CLI --define (highest precedence, applied before rpm derives
+        // _sourcedir/_builddir). --load is too late for build-path macros — sources would
+        // resolve under the default ~/rpmbuild. orch.rs is the single source for these.
         let st = Command::new("rpmbuild")
             .args(["-ba", "--target", arch])
             .args(["--define", &format!("_topdir {}", topdir.display())])
