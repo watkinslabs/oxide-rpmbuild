@@ -179,8 +179,8 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              find . \\( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \\) -delete 2>/dev/null || true\n\
              {cache_write}\
              CC=\"$CC\" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD=\"\" \\\n\
-             CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types\" \\\n\
-             CFLAGS=\"-Os -D_GNU_SOURCE {cf} -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI\" \\\n\
+             CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
+             CFLAGS=\"-Os -D_GNU_SOURCE {cf} -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
              LDFLAGS=\"-static\" \\\n\
              ./configure --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
