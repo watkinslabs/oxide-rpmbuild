@@ -1,9 +1,38 @@
 # oxide rpmbuild — vendor → RPM repo build system
 
 Fedora-grade, **from-source** RPM build for the oxide userspace. Cross-builds
-each vendor package static-musl for `x86_64` and `aarch64`, packages it as an
-RPM with the `.ox1` dist tag, and (once `createrepo_c` is installed) publishes a
-`dnf`-consumable repo.
+each vendor package for `x86_64` and `aarch64` (host-independent vendored musl
+toolchains, **shared+dynamic** libs/binaries), packages as RPMs with the `.ox1`
+dist tag, signs them, and publishes a `dnf`-consumable repo.
+
+## ✅ KNOWN-GOOD BASELINE — 2026-06-13 (tag `known-good-2026-06-13`)
+
+**69 packages build clean, both arches** (`x86_64` + `aarch64`), host-independent,
+shared+dynamic, GPG-signed, in the repo. Reproduce from a clean checkout with:
+
+```
+cd vendorctl && cargo build          # build the orchestrator
+sh register-*.sh                     # repopulate the catalog (sources + recipes)
+./vendorctl/target/debug/vendorctl build-all     # dependency-ordered parallel build
+./vendorctl/target/debug/vendorctl publish       # createrepo + sign
+```
+
+What works at this baseline:
+- **5 build-system families:** plain-make, autotools, cargo (Rust), go, script (zlib/openssl custom configure).
+- **All `-devel` libs** shared `.so` (SONAME-versioned): ncurses, openssl, zlib, expat, pcre2,
+  libffi, libxcrypt, libunistring, libgpg-error, libgcrypt, libidn2, libevent, libseccomp,
+  attr, acl, kmod, lz4, zstd, libcap.
+- **Tools:** 20 cargo, 7 go, GNU autotools cluster, coreutils (106 cmds), curl (dynamic→our
+  libssl), bash, jq, pv, rsync, less, nano, htop, ncdu, dialog, procps-ng, bzip2.
+- **Engine:** sysroot `build_requires` (per-package, mock-chroot analog), dependency-ordered
+  parallel `build-all` (waves), `plan`/`graph`/`toolchains` (target-aware), distributed
+  `src fetch` (upstream + sha256), config.cache/cflags/ldflags/install_cmd, `-rpath-link`.
+
+**Not yet at this baseline (the remaining tail):** wget (pcre2 `.so` symlink), tmux (musl
+forkpty), vim (termcap), openssh (needs pam), dhcpcd/iproute2/entr (custom configure),
+btop/dos2unix/tree, zip/unzip/doom, python; **meson family** (pam, dbus, systemd) not yet
+implemented. ~29 packages remain toward the full 98 vendor folders (8 of which are
+non-package: cross/musl/go/grub/limine/firmware/terminfo/lib).
 
 Sibling repo of `oxide2` (kernel). Sources are *referenced* from
 `../oxide2/vendor/` — this tree does not copy the 14 GB of vendor sources.

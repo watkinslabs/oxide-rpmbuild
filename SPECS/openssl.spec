@@ -16,19 +16,22 @@ OpenSSL -devel (oxide)
 %setup -q -n openssl-3.0.15
 
 %build
-SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
+SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 UAPI=""
-export PATH="$TCBIN:$PATH"
+export PATH="$SYS/usr/bin:$TCBIN:$PATH"
 export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 export CC CROSS UAPI
 export CFLAGS="-Os -fPIC  -I$SYS/usr/include $UAPI"
-export LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib "
+export LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib "
 export PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig"
 unset CC; ./Configure linux-%{_target_cpu} --cross-compile-prefix=$CROSS shared no-tests no-module no-legacy --prefix=/usr --libdir=lib && make %{?_smp_mflags}
 
 %install
-if [ "%{_target_cpu}" = "aarch64" ]; then export PATH=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin:$PATH; else export PATH=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin:$PATH; fi
+SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
+export CC CROSS PATH="$SYS/usr/bin:$TCBIN:$PATH"
+unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 make install_sw DESTDIR=%{buildroot}
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true

@@ -2,18 +2,18 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           ncurses
-Version:        6.5
+Name:           wget
+Version:        1.21.4
 Release:        1%{?dist}
-Summary:        ncurses (static-musl -devel, oxide)
-License:        X11
-Source0:        ncurses-6.5.tar.gz
+Summary:        GNU wget (oxide)
+License:        GPL-3.0-or-later
+Source0:        wget-1.21.4.tar.gz
 
 %description
-ncurses (static-musl -devel, oxide)
+GNU wget (oxide)
 
 %prep
-%setup -q -n ncurses-6.5
+%setup -q -n wget-1.21.4
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
@@ -23,12 +23,17 @@ export PATH="$SYS/usr/bin:$TCBIN:$PATH"
 export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
+cat > config.cache <<'OXEOF'
+ac_cv_func_malloc_0_nonnull=yes
+ac_cv_func_realloc_0_nonnull=yes
+ac_cv_func_working_mktime=yes
+OXEOF
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
-CFLAGS_FOR_BUILD="-D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
-LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib " \
+CFLAGS_FOR_BUILD="-D_GNU_SOURCE  -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
+CFLAGS="-Os -D_GNU_SOURCE  -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib -static" \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --with-shared --with-termlib --without-normal --without-debug --without-ada --without-cxx --without-cxx-binding --without-manpages --without-progs --without-tack --without-tests --enable-pc-files=no --disable-db-install --enable-widec --enable-overwrite --with-default-terminfo-dir=/usr/share/terminfo --with-terminfo-dirs=/etc/terminfo:/lib/terminfo:/usr/share/terminfo
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --cache-file=config.cache --disable-shared --enable-static --with-ssl=openssl --with-openssl=yes --without-libpsl --disable-nls --disable-iri --prefix=/usr
 make %{?_smp_mflags}
 
 %install
@@ -36,12 +41,12 @@ SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 export CC CROSS PATH="$SYS/usr/bin:$TCBIN:$PATH"
 unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
-make install DESTDIR=%{buildroot} INSTALL='install -p' && (cd %{buildroot}/usr/lib && for l in tinfo ncurses form menu panel; do [ -e lib${l}w.so ] && ln -sf lib${l}w.so lib${l}.so; done; true)
+make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/ncurses.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/wget.files
 
-%files -f %{_builddir}/ncurses.files
+%files -f %{_builddir}/wget.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 6.5-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 1.21.4-1
 - Generated oxide spec (autotools family).
