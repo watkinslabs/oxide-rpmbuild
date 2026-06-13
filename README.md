@@ -5,10 +5,17 @@ each vendor package for `x86_64` and `aarch64` (host-independent vendored musl
 toolchains, **shared+dynamic** libs/binaries), packages as RPMs with the `.ox1`
 dist tag, signs them, and publishes a `dnf`-consumable repo.
 
-## ✅ KNOWN-GOOD BASELINE — 2026-06-13 (tag `known-good-2026-06-13`)
+## ✅ KNOWN-GOOD BASELINE — 2026-06-13b (tag `known-good-2026-06-13b`)
 
-**69 packages build clean, both arches** (`x86_64` + `aarch64`), host-independent,
-shared+dynamic, GPG-signed, in the repo. Reproduce from a clean checkout with:
+**72 packages build clean, both arches** (`x86_64` + `aarch64`), host-independent,
+shared+dynamic, GPG-signed, in the repo. All **6 build-system families** work
+(plain-make, autotools, cargo, go, script, **meson**). Includes the full system
+pieces: **pam, openssh, shadow** (full-featured — pam/acl/attr enabled, not the old
+minimal `--without` stubs), all `-devel` libs, the cargo/go clusters, coreutils, curl.
+
+**Policy:** build the libs and **enable features + `build_requires`** (real distro
+packages), only `--without` a feature when its lib isn't vendored. **selinux is never
+enabled.** Reproduce from a clean checkout with:
 
 ```
 cd vendorctl && cargo build          # build the orchestrator
@@ -28,11 +35,18 @@ What works at this baseline:
   parallel `build-all` (waves), `plan`/`graph`/`toolchains` (target-aware), distributed
   `src fetch` (upstream + sha256), config.cache/cflags/ldflags/install_cmd, `-rpath-link`.
 
-**Not yet at this baseline (the remaining tail):** wget (pcre2 `.so` symlink), tmux (musl
-forkpty), vim (termcap), openssh (needs pam), dhcpcd/iproute2/entr (custom configure),
-btop/dos2unix/tree, zip/unzip/doom, python; **meson family** (pam, dbus, systemd) not yet
-implemented. ~29 packages remain toward the full 98 vendor folders (8 of which are
-non-package: cross/musl/go/grub/limine/firmware/terminfo/lib).
+**Remaining tail (~18 toward the full 98; 8 folders are non-package: cross/musl/go/grub/
+limine/firmware/terminfo/lib):**
+- **Need a SOURCE-PATCH mechanism** (next engine feature — these were `sed`-patched in the old
+  build.sh, not just configured): **util-linux** (musl `statx` backport — the vendored cross
+  musl lacks statx; needs source patch + toolchain header inject), **vim** (termcap), **tmux**
+  (musl `forkpty`).
+- **Quick:** wget (pcre2 `.so` symlink), btop/dos2unix/tree (plain-make), dhcpcd/iproute2/entr
+  (custom configure), zip/unzip (bespoke Makefiles).
+- **Hard:** dbus (meson), **systemd** (huge meson), **python** (CPython).
+
+The engine handles every *unpatched* package across all 6 families. The patch mechanism
+(`prep_script`/patches field run in `%prep`) is the gating feature for util-linux/vim/tmux.
 
 Sibling repo of `oxide2` (kernel). Sources are *referenced* from
 `../oxide2/vendor/` — this tree does not copy the 14 GB of vendor sources.

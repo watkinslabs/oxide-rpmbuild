@@ -2,18 +2,18 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           attr
-Version:        2.5.2
+Name:           shadow
+Version:        4.16.0
 Release:        1%{?dist}
-Summary:        attr -devel (oxide)
-License:        LGPL-2.1-or-later
-Source0:        attr-2.5.2.tar.gz
+Summary:        shadow (oxide)
+License:        BSD-3-Clause
+Source0:        shadow-4.16.0.tar.xz
 
 %description
-attr -devel (oxide)
+shadow (oxide)
 
 %prep
-%setup -q -n attr-2.5.2
+%setup -q -n shadow-4.16.0
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
@@ -24,11 +24,11 @@ export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
-CFLAGS_FOR_BUILD="-D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+CFLAGS_FOR_BUILD="-D_GNU_SOURCE  -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
+CFLAGS="-Os -D_GNU_SOURCE  -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
 LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --bindir=/bin --sbindir=/sbin --disable-nls --disable-rpath --without-selinux --without-audit --without-libcrack --without-libbsd --without-libpasswdqc --without-tcb --without-su --with-libpam --disable-logind --disable-account-tools-setuid --enable-shadowgrp
 make %{?_smp_mflags}
 
 %install
@@ -39,9 +39,9 @@ unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/attr.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/shadow.files
 
-%files -f %{_builddir}/attr.files
+%files -f %{_builddir}/shadow.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 2.5.2-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 4.16.0-1
 - Generated oxide spec (autotools family).

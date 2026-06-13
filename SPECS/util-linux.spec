@@ -2,18 +2,18 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           attr
-Version:        2.5.2
+Name:           util-linux
+Version:        2.40.2
 Release:        1%{?dist}
-Summary:        attr -devel (oxide)
-License:        LGPL-2.1-or-later
-Source0:        attr-2.5.2.tar.gz
+Summary:        util-linux (oxide)
+License:        GPL-2.0-or-later
+Source0:        util-linux-2.40.2.tar.xz
 
 %description
-attr -devel (oxide)
+util-linux (oxide)
 
 %prep
-%setup -q -n attr-2.5.2
+%setup -q -n util-linux-2.40.2
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
@@ -23,12 +23,17 @@ export PATH="$SYS/usr/bin:$TCBIN:$PATH"
 export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
+cat > config.cache <<'OXEOF'
+ac_cv_func_statx=yes
+ac_cv_func_close_range=no
+scanf_cv_alloc_modifier=ms
+OXEOF
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
-CFLAGS_FOR_BUILD="-D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+CFLAGS_FOR_BUILD="-D_GNU_SOURCE  -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
+CFLAGS="-Os -D_GNU_SOURCE  -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
 LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --cache-file=config.cache --prefix=/usr --bindir=/bin --sbindir=/sbin --disable-nls --disable-rpath --disable-makeinstall-chown --without-python --disable-liblastlog2 --without-systemd --without-systemdsystemunitdir --without-tmpfilesdir --without-cap-ng --without-selinux --without-audit --without-econf --without-cryptsetup --without-btrfs --without-libutempter --without-readline
 make %{?_smp_mflags}
 
 %install
@@ -39,9 +44,9 @@ unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 make install DESTDIR=%{buildroot} INSTALL='install -p'
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/attr.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/util-linux.files
 
-%files -f %{_builddir}/attr.files
+%files -f %{_builddir}/util-linux.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 2.5.2-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 2.40.2-1
 - Generated oxide spec (autotools family).

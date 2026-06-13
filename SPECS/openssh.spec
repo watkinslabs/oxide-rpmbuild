@@ -2,18 +2,18 @@
 %global debug_package %{nil}
 %global __global_compiler_flags %{nil}
 
-Name:           attr
-Version:        2.5.2
+Name:           openssh
+Version:        9.9p2
 Release:        1%{?dist}
-Summary:        attr -devel (oxide)
-License:        LGPL-2.1-or-later
-Source0:        attr-2.5.2.tar.gz
+Summary:        OpenSSH (oxide)
+License:        BSD
+Source0:        openssh-9.9p2.tar.gz
 
 %description
-attr -devel (oxide)
+OpenSSH (oxide)
 
 %prep
-%setup -q -n attr-2.5.2
+%setup -q -n openssh-9.9p2
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
@@ -24,11 +24,11 @@ export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
-CFLAGS_FOR_BUILD="-D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+CFLAGS_FOR_BUILD="-D_GNU_SOURCE  -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
+CFLAGS="-Os -D_GNU_SOURCE  -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
 LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
-./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --without-openssl --with-pam --without-selinux --without-libedit --without-audit --without-rpath --with-privsep-user=root --with-privsep-path=/var/empty --with-sandbox=no --with-maildir=/var/mail --with-default-path=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin --prefix=/usr --sysconfdir=/etc/ssh --libexecdir=/usr/libexec --enable-dsa-keys=no
 make %{?_smp_mflags}
 
 %install
@@ -36,12 +36,12 @@ SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 export CC CROSS PATH="$SYS/usr/bin:$TCBIN:$PATH"
 unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
-make install DESTDIR=%{buildroot} INSTALL='install -p'
+make install-nokeys STRIP_OPT= DESTDIR=%{buildroot}
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true
-( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/attr.files
+( cd %{buildroot} && find . -type f -o -type l ) | sed 's#^\.##' | LC_ALL=C sort > %{_builddir}/openssh.files
 
-%files -f %{_builddir}/attr.files
+%files -f %{_builddir}/openssh.files
 %changelog
-* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 2.5.2-1
+* Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - 9.9p2-1
 - Generated oxide spec (autotools family).
