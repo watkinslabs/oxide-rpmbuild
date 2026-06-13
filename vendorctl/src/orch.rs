@@ -440,6 +440,32 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              RUSTFLAGS=\"-C target-feature=+crt-static\" cargo build --release --target $TGT {b}\n",
             cf_export = if cf.is_empty() { String::new() } else { format!("export CFLAGS=\"{cf}\" CXXFLAGS=\"{cf}\"\n") },
             ccarm = cc_arm.display(), ccx86 = cc_x86.display(), b = b),
+        // meson: generate a cross-file from the vendored toolchain + sysroot, then meson+ninja.
+        "meson" => format!(
+            "{preamble}\
+             unset PKG_CONFIG_PATH\n\
+             export PKG_CONFIG_LIBDIR=\"$SYS/usr/lib/pkgconfig\" PKG_CONFIG_SYSROOT_DIR=\"$SYS\"\n\
+             cat > oxide-cross.ini <<OXEOF\n\
+             [binaries]\n\
+             c = '$CC'\n\
+             ar = '${{CROSS}}ar'\n\
+             strip = '${{CROSS}}strip'\n\
+             pkg-config = 'pkg-config'\n\
+             [host_machine]\n\
+             system = 'linux'\n\
+             cpu_family = '%{{_target_cpu}}'\n\
+             cpu = '%{{_target_cpu}}'\n\
+             endian = 'little'\n\
+             [built-in options]\n\
+             c_args = ['-I$SYS/usr/include']\n\
+             c_link_args = ['-L$SYS/usr/lib', '-Wl,-rpath,/usr/lib', '-Wl,-rpath-link,$SYS/usr/lib']\n\
+             [properties]\n\
+             sys_root = '$SYS'\n\
+             pkg_config_libdir = ['$SYS/usr/lib/pkgconfig']\n\
+             OXEOF\n\
+             rm -rf _b\n\
+             meson setup _b --cross-file oxide-cross.ini --prefix=/usr --libdir=lib {b}\n\
+             ninja -C _b\n"),
         "go" => format!(
             // Go cross-compiles natively via GOOS/GOARCH (no cross toolchain); CGO off = static.
             // -o %{{name}} fixes the output path; build_args = the package path (. or ./cmd/x).
@@ -497,8 +523,9 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
     // links/extra binaries (gawk->awk, gzip->gunzip/zcat, coreutils applets, …). %files is
     // auto-generated from whatever actually landed, so nothing upstream ships is dropped.
     // cargo/plain-make: explicit install_map (cargo man/completions are a per-pkg follow-up).
-    let (install, files_section) = if m.build_system == "autotools" || m.build_system == "script" {
-        let cmd = if m.install_cmd.is_empty() { "make install DESTDIR=%{buildroot} INSTALL='install -p'".to_string() } else { m.install_cmd.clone() };
+    let (install, files_section) = if m.build_system == "autotools" || m.build_system == "script" || m.build_system == "meson" {
+        let default_install = if m.build_system == "meson" { "DESTDIR=%{buildroot} ninja -C _b install" } else { "make install DESTDIR=%{buildroot} INSTALL='install -p'" };
+        let cmd = if m.install_cmd.is_empty() { default_install.to_string() } else { m.install_cmd.clone() };
         let pathexp = tc_path_export();
         let inst = format!(
             "{pathexp}{cmd}\n\
