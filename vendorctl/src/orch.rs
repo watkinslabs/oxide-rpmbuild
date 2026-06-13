@@ -3,9 +3,179 @@
 use crate::db::now_ts;
 use crate::tree;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+
+// Group enabled packages into dependency WAVES (Kahn's, level by level): wave[0] = packages
+// with no build_requires, wave[n] = packages whose deps are all in earlier waves. Within a
+// wave packages are independent → safe to build in parallel. The Fedora BuildRequires-graph
+// approach. Errors on a dependency cycle.
+fn all_enabled(conn: &Connection) -> Result<Vec<String>, String> {
+    let mut st = conn.prepare("SELECT key FROM packages WHERE enabled=1 ORDER BY key")
+        .map_err(|e| format!("vendorctl: list packages: {e}"))?;
+    let rows = st.query_map([], |r| r.get::<_, String>(0))
+        .map_err(|e| format!("vendorctl: query packages: {e}"))?;
+    let mut v = Vec::new();
+    for r in rows { v.push(r.map_err(|e| format!("vendorctl: row: {e}"))?); }
+    Ok(v)
+}
+
+// Transitive build_requires closure of `targets` (targets + everything they need).
+fn closure(conn: &Connection, targets: &[String]) -> Result<Vec<String>, String> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut stack = targets.to_vec();
+    while let Some(k) = stack.pop() {
+        if !seen.insert(k.clone()) { continue; }
+        let m = resolve(conn, &k)?;
+        for d in m.build_requires.split_whitespace() {
+            if !seen.contains(d) { stack.push(d.to_string()); }
+        }
+    }
+    let mut v: Vec<String> = seen.into_iter().collect();
+    v.sort();
+    Ok(v)
+}
+
+// targets empty => all enabled; else the dependency closure of the targets.
+pub(crate) fn topo_waves(conn: &Connection, targets: &[String]) -> Result<Vec<Vec<String>>, String> {
+    let keys: Vec<String> = if targets.is_empty() { all_enabled(conn)? } else { closure(conn, targets)? };
+    let kset: HashSet<&str> = keys.iter().map(|s| s.as_str()).collect();
+    let mut indeg: HashMap<String, usize> = keys.iter().map(|k| (k.clone(), 0)).collect();
+    let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
+    for k in &keys {
+        let m = resolve(conn, k)?;
+        let ds: Vec<String> = m.build_requires.split_whitespace()
+            .filter(|d| kset.contains(d)).map(|s| s.to_string()).collect();
+        *indeg.get_mut(k).unwrap() = ds.len();
+        for d in ds { dependents.entry(d).or_default().push(k.clone()); }
+    }
+    let mut waves: Vec<Vec<String>> = Vec::new();
+    let mut cur: Vec<String> = keys.iter().filter(|k| indeg[*k] == 0).cloned().collect();
+    cur.sort();
+    let mut done = 0usize;
+    while !cur.is_empty() {
+        waves.push(cur.clone());
+        done += cur.len();
+        let mut next: Vec<String> = Vec::new();
+        for k in &cur {
+            if let Some(deps_on) = dependents.get(k) {
+                for p in deps_on {
+                    let e = indeg.get_mut(p).unwrap();
+                    *e -= 1;
+                    if *e == 0 { next.push(p.clone()); }
+                }
+            }
+        }
+        next.sort(); next.dedup();
+        cur = next;
+    }
+    if done != keys.len() {
+        let stuck: Vec<&String> = keys.iter().filter(|k| indeg[*k] > 0).collect();
+        return Err(format!("vendorctl: dependency cycle / missing dep among: {stuck:?}"));
+    }
+    Ok(waves)
+}
+
+pub(crate) fn topo_order(conn: &Connection, targets: &[String]) -> Result<Vec<String>, String> {
+    Ok(topo_waves(conn, targets)?.into_iter().flatten().collect())
+}
+
+// `plan [pkg...]`: dependency-ordered build plan (the scan matrix) for the given packages +
+// their deps, or all packages if none given.
+pub(crate) fn plan(conn: &Connection, targets: &[String]) -> Result<(), String> {
+    let order = topo_order(conn, targets)?;
+    for (i, k) in order.iter().enumerate() {
+        let m = resolve(conn, k)?;
+        let br = if m.build_requires.is_empty() { "-".to_string() } else { m.build_requires.clone() };
+        println!("{:>3}  {:<14} [{}]  needs: {br}", i + 1, k, m.build_system);
+    }
+    println!("-- {} packages, dependency-ordered --", order.len());
+    Ok(())
+}
+
+// `graph [pkg...]`: show the dependency graph — a tree per package that HAS build deps, plus a
+// flat list of the leaves (no build deps). Scoped to the given packages' closure, or all.
+pub(crate) fn graph(conn: &Connection, targets: &[String]) -> Result<(), String> {
+    let keys: Vec<String> = if targets.is_empty() { all_enabled(conn)? } else { closure(conn, targets)? };
+    let kset: HashSet<&str> = keys.iter().map(|s| s.as_str()).collect();
+    let mut deps: HashMap<String, Vec<String>> = HashMap::new();
+    let mut leaves: Vec<String> = Vec::new();
+    for k in &keys {
+        let m = resolve(conn, k)?;
+        let ds: Vec<String> = m.build_requires.split_whitespace()
+            .filter(|d| kset.contains(d)).map(|s| s.to_string()).collect();
+        if ds.is_empty() { leaves.push(k.clone()); } else { deps.insert(k.clone(), ds); }
+    }
+    fn print_tree(k: &str, deps: &HashMap<String, Vec<String>>, depth: usize, seen: &mut HashSet<String>) {
+        let indent = "  ".repeat(depth);
+        let arrow = if depth == 0 { "" } else { "└─ " };
+        println!("{indent}{arrow}{k}");
+        if !seen.insert(k.to_string()) { return; }
+        if let Some(ds) = deps.get(k) { for d in ds { print_tree(d, deps, depth + 1, seen); } }
+    }
+    println!("== dependency graph ({} pkgs) ==", keys.len());
+    let mut roots: Vec<&String> = deps.keys().collect();
+    roots.sort();
+    for r in roots { let mut seen = HashSet::new(); print_tree(r, &deps, 0, &mut seen); }
+    leaves.sort();
+    println!("\n-- no build deps ({}) --\n{}", leaves.len(), leaves.join(" "));
+    Ok(())
+}
+
+// `build-all`: dependency waves, parallel within each wave. fetch+gen run sequentially (fast),
+// then each wave's packages build concurrently (capped) by shelling to `vendorctl build` —
+// every child opens its own WAL connection and builds both arches sequentially (so the
+// per-package rpmbuild BUILD dir never collides). Deps are in earlier waves, so each
+// package's sysroot is populated when it builds.
+pub(crate) fn build_all(conn: &Connection, arches: &[String], targets: &[String]) -> Result<(), String> {
+    let waves = topo_waves(conn, targets)?;
+    let total: usize = waves.iter().map(|w| w.len()).sum();
+    println!("== build-all: {total} packages in {} dependency waves ==", waves.len());
+    // fetch (if missing) + gen spec — sequential, cheap
+    for key in waves.iter().flatten() {
+        let m = resolve(conn, key)?;
+        if let Some(s) = source_for(conn, m.id)? {
+            let fname = if s.filename.is_empty() { format!("{key}-{}.tar.gz", m.version) } else { s.filename };
+            if !s.url.is_empty() && !tree::sources().join(&fname).is_file() {
+                if let Err(e) = fetch(conn, key) { eprintln!("fetch {key}: {e}"); }
+            }
+        }
+        if let Err(e) = gen_spec(conn, key) { eprintln!("gen {key}: {e}"); }
+    }
+    let exe = std::env::current_exe().map_err(|e| format!("vendorctl: current_exe: {e}"))?;
+    let single_arch: Option<&str> = if arches.len() == 1 { Some(arches[0].as_str()) } else { None };
+    let cap = 10usize;
+    let mut failed: Vec<String> = Vec::new();
+    for (wi, wave) in waves.iter().enumerate() {
+        println!("-- wave {}/{}: {} pkgs: {wave:?} --", wi + 1, waves.len(), wave.len());
+        for chunk in wave.chunks(cap) {
+            let mut kids: Vec<(String, std::process::Child)> = Vec::new();
+            for key in chunk {
+                let log = std::fs::File::create(format!("/tmp/ba-{key}.log"))
+                    .map_err(|e| format!("vendorctl: log {key}: {e}"))?;
+                let err = log.try_clone().map_err(|e| format!("vendorctl: log dup: {e}"))?;
+                let mut c = Command::new(&exe);
+                c.arg("build").arg(key);
+                if let Some(a) = single_arch { c.arg("--arch").arg(a); }
+                c.stdout(std::process::Stdio::from(log)).stderr(std::process::Stdio::from(err));
+                match c.spawn() {
+                    Ok(ch) => kids.push((key.clone(), ch)),
+                    Err(e) => { eprintln!("spawn {key}: {e}"); failed.push(key.clone()); }
+                }
+            }
+            for (key, mut ch) in kids {
+                match ch.wait() {
+                    Ok(s) if s.success() => println!("  OK   {key}"),
+                    _ => { println!("  FAIL {key}  (/tmp/ba-{key}.log)"); failed.push(key); }
+                }
+            }
+        }
+    }
+    if failed.is_empty() { println!("== all {total} built =="); Ok(()) }
+    else { Err(format!("vendorctl: {} failed: {failed:?}", failed.len())) }
+}
 
 pub(crate) struct VerMeta {
     pub id: i64,
@@ -152,6 +322,15 @@ fn sign_rpm(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+// Per-arch toolchain PATH export — needed in %install too (libtool relink/strip at install
+// time needs the cross nm/strip on PATH; %install doesn't run the %build preamble).
+fn tc_path_export() -> String {
+    let vr = tree::vendor_root();
+    format!("if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then export PATH={}:$PATH; else export PATH={}:$PATH; fi\n",
+        vr.join("cross/aarch64-linux-musl-cross/bin").display(),
+        vr.join("cross/x86_64-linux-musl-cross/bin").display())
+}
+
 // %build block per build-system family.
 fn build_block(m: &VerMeta) -> Result<String, String> {
     // HOST-INDEPENDENT: both arches use the self-contained vendored cross toolchains, which
@@ -162,14 +341,16 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
     // SYS = per-arch sysroot where build_requires deps are installed; build against it.
     let preamble = format!(
         "SYS={topdir}/sysroot/%{{_target_cpu}}\n\
-         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; \
-         else CC={ccx86}; CROSS={px86}; fi\n\
+         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
+         else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
          UAPI=\"\"\n\
-         export AR=\"${{CROSS}}ar\" RANLIB=\"${{CROSS}}ranlib\" NM=\"${{CROSS}}nm\" STRIP=\"${{CROSS}}strip\"\n\
-         export C_INCLUDE_PATH=\"$SYS/usr/include\" CPLUS_INCLUDE_PATH=\"$SYS/usr/include\" LIBRARY_PATH=\"$SYS/usr/lib\"\n",
+         export PATH=\"$TCBIN:$PATH\"\n\
+         export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX=\"${{CROSS}}g++\"\n",
         topdir = tree::topdir().display(),
         ccarm = cc_arm.display(), parm = cc_arm.display().to_string().trim_end_matches("gcc"),
-        ccx86 = cc_x86.display(), px86 = cc_x86.display().to_string().trim_end_matches("gcc"));
+        armbin = cc_arm.parent().unwrap().display(),
+        ccx86 = cc_x86.display(), px86 = cc_x86.display().to_string().trim_end_matches("gcc"),
+        x86bin = cc_x86.parent().unwrap().display());
     let b = &m.build_args;
     let cf = &m.cflags; // extra per-package CFLAGS (e.g. -std=gnu89)
     let lf = &m.ldflags; // extra per-package LDFLAGS (e.g. -L<dep>/lib for shared deps)
@@ -192,7 +373,6 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              CFLAGS=\"-Os -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
              LDFLAGS=\"-Wl,-rpath,/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
              PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\" \\\n\
-             LD_LIBRARY_PATH=\"$SYS/usr/lib\" \\\n\
              ./configure --build=x86_64-pc-linux-gnu --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
         },
@@ -278,8 +458,9 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
     // cargo/plain-make: explicit install_map (cargo man/completions are a per-pkg follow-up).
     let (install, files_section) = if m.build_system == "autotools" || m.build_system == "script" {
         let cmd = if m.install_cmd.is_empty() { "make install DESTDIR=%{buildroot} INSTALL='install -p'".to_string() } else { m.install_cmd.clone() };
+        let pathexp = tc_path_export();
         let inst = format!(
-            "{cmd}\n\
+            "{pathexp}{cmd}\n\
              rm -f %{{buildroot}}%{{_infodir}}/dir\n\
              find %{{buildroot}} -name '*.la' -delete 2>/dev/null || true\n\
              ( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n");

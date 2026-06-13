@@ -16,15 +16,19 @@ acl -devel (oxide)
 %setup -q -n acl-2.3.2
 
 %build
-. /home/nd/oxide/rpmbuild/lib/uapi-stage.sh
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; UAPI="$(uapi_cflags aarch64)"; else CC=musl-gcc; UAPI="$(uapi_cflags x86_64)"; fi
+SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
+UAPI=""
+export PATH="$TCBIN:$PATH"
+export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
-LDFLAGS="-Wl,-rpath,/usr/lib -L/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}/lib" \
-./configure --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
+CFLAGS="-Os -D_GNU_SOURCE -fPIC -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib " \
+PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
 make %{?_smp_mflags}
 
 %install

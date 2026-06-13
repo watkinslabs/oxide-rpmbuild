@@ -17,9 +17,10 @@ OpenSSL -devel (oxide)
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
 UAPI=""
-export C_INCLUDE_PATH="$SYS/usr/include" CPLUS_INCLUDE_PATH="$SYS/usr/include" LIBRARY_PATH="$SYS/usr/lib"
+export PATH="$TCBIN:$PATH"
+export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
 export CC CROSS UAPI
 export CFLAGS="-Os -fPIC  -I$SYS/usr/include $UAPI"
 export LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib "
@@ -27,6 +28,7 @@ export PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig"
 unset CC; ./Configure linux-%{_target_cpu} --cross-compile-prefix=$CROSS shared no-tests no-module no-legacy --prefix=/usr --libdir=lib && make %{?_smp_mflags}
 
 %install
+if [ "%{_target_cpu}" = "aarch64" ]; then export PATH=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin:$PATH; else export PATH=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin:$PATH; fi
 make install_sw DESTDIR=%{buildroot}
 rm -f %{buildroot}%{_infodir}/dir
 find %{buildroot} -name '*.la' -delete 2>/dev/null || true

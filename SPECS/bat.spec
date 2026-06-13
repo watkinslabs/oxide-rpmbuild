@@ -18,7 +18,10 @@ bat: cat clone with syntax highlighting (oxide)
 %build
 unset CC CXX CPP CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 export CFLAGS="-std=gnu11" CXXFLAGS="-std=gnu11"
-if [ "%{_target_cpu}" = "aarch64" ]; then TGT=aarch64-unknown-linux-musl; export PATH="/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin:$PATH"; export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; export CC_aarch64_unknown_linux_musl=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; else TGT=x86_64-unknown-linux-musl; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then TGT=aarch64-unknown-linux-musl; G=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; else TGT=x86_64-unknown-linux-musl; G=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; fi
+export PATH="$(dirname $G):$PATH"
+V=$(echo $TGT | tr 'a-z-' 'A-Z_'); export CARGO_TARGET_${V}_LINKER=$G
+export CC_$(echo $TGT | tr - _)=$G
 rustup target add $TGT >/dev/null 2>&1 || true
 RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target $TGT 
 

@@ -48,6 +48,9 @@ fn run() -> Result<(), String> {
             orch::gen_spec(&conn, req_pos(&args, 2, "spec gen <pkg>")?)
         }
         "build" => orch::build(&conn, req_pos(&args, 1, "build <pkg> [--arch x86_64|aarch64|both]")?, &arch_list(&args)),
+        "plan" => orch::plan(&conn, &pkg_args(&args[1..])),
+        "graph" => orch::graph(&conn, &pkg_args(&args[1..])),
+        "build-all" => orch::build_all(&conn, &arch_list(&args), &pkg_args(&args[1..])),
         "publish" => orch::create_repo(),
         "all" => {
             let key = req_pos(&args, 1, "all <pkg> [--arch both]")?;
@@ -58,6 +61,19 @@ fn run() -> Result<(), String> {
         "-h" | "--help" => usage(),
         other => Err(format!("vendorctl: unknown command `{other}`")),
     }
+}
+
+// positional package names (skip flags + their values, e.g. --arch <v>).
+fn pkg_args(args: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut skip = false;
+    for a in args {
+        if skip { skip = false; continue; }
+        if a == "--arch" { skip = true; continue; }
+        if a.starts_with('-') { continue; }
+        out.push(a.clone());
+    }
+    out
 }
 
 // --arch x86_64|aarch64|both (default both).

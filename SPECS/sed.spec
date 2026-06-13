@@ -19,6 +19,7 @@ GNU sed (static-musl, oxide)
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
 if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; fi
 UAPI=""
+export AR="${CROSS}ar" RANLIB="${CROSS}ranlib" NM="${CROSS}nm" STRIP="${CROSS}strip"
 export C_INCLUDE_PATH="$SYS/usr/include" CPLUS_INCLUDE_PATH="$SYS/usr/include" LIBRARY_PATH="$SYS/usr/lib"
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
@@ -28,7 +29,7 @@ CFLAGS="-Os -D_GNU_SOURCE  -I$SYS/usr/include -Wno-implicit-function-declaration
 LDFLAGS="-Wl,-rpath,/usr/lib -L$SYS/usr/lib " \
 PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig" \
 LD_LIBRARY_PATH="$SYS/usr/lib" \
-./configure --host=%{_target_cpu}-linux-musl --disable-nls --disable-acl --disable-i18n --without-selinux --prefix=/usr
+./configure --build=x86_64-pc-linux-gnu --host=%{_target_cpu}-linux-musl --disable-nls --disable-acl --disable-i18n --without-selinux --prefix=/usr
 make %{?_smp_mflags}
 
 %install
