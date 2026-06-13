@@ -85,6 +85,8 @@ fn cmd_meta(conn: &Connection, args: &[String]) -> Result<(), String> {
         ("cflags", parse_flag(args, "--cflags")),
         ("config_cache", parse_flag(args, "--config-cache")),
         ("ldflags", parse_flag(args, "--ldflags")),
+        ("install_cmd", parse_flag(args, "--install-cmd")),
+        ("build_requires", parse_flag(args, "--build-requires")),
     ];
     for (col, val) in upd {
         if let Some(v) = val {

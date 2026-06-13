@@ -92,6 +92,8 @@ pub(crate) fn open(db_path: &Path) -> Result<Connection, String> {
     let _ = conn.execute("ALTER TABLE package_versions ADD COLUMN cflags TEXT NOT NULL DEFAULT ''", []);
     let _ = conn.execute("ALTER TABLE package_versions ADD COLUMN config_cache TEXT NOT NULL DEFAULT ''", []);
     let _ = conn.execute("ALTER TABLE package_versions ADD COLUMN ldflags TEXT NOT NULL DEFAULT ''", []);
+    let _ = conn.execute("ALTER TABLE package_versions ADD COLUMN install_cmd TEXT NOT NULL DEFAULT ''", []);
+    let _ = conn.execute("ALTER TABLE package_versions ADD COLUMN build_requires TEXT NOT NULL DEFAULT ''", []);
     Ok(conn)
 }
 

@@ -19,6 +19,8 @@ pub(crate) struct VerMeta {
     pub cflags: String,
     pub config_cache: String,
     pub ldflags: String,
+    pub install_cmd: String,
+    pub build_requires: String,
 }
 
 pub(crate) struct Install {
@@ -32,13 +34,14 @@ pub(crate) struct Install {
 // Resolve the build-target version (most recently added) for a package.
 pub(crate) fn resolve(conn: &Connection, key: &str) -> Result<VerMeta, String> {
     conn.query_row(
-        "SELECT id, version, build_system, summary, license, upstream_url, src_subdir, build_args, cflags, config_cache, ldflags \
+        "SELECT id, version, build_system, summary, license, upstream_url, src_subdir, build_args, cflags, config_cache, ldflags, install_cmd, build_requires \
          FROM package_versions WHERE package_key=?1 ORDER BY id DESC LIMIT 1",
         params![key],
         |r| Ok(VerMeta {
             id: r.get(0)?, version: r.get(1)?, build_system: r.get(2)?, summary: r.get(3)?,
             license: r.get(4)?, upstream_url: r.get(5)?, src_subdir: r.get(6)?, build_args: r.get(7)?,
             cflags: r.get(8)?, config_cache: r.get(9)?, ldflags: r.get(10)?,
+            install_cmd: r.get(11)?, build_requires: r.get(12)?,
         }),
     )
     .optional()
@@ -130,11 +133,6 @@ pub(crate) fn fetch(conn: &Connection, key: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn cross_cc() -> String {
-    tree::vendor_root()
-        .join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc")
-        .display().to_string()
-}
 
 // GPG identity used to sign RPMs + repo metadata. Override with OXIDE_GPG_NAME.
 fn gpg_name() -> String {
@@ -156,13 +154,21 @@ fn sign_rpm(path: &Path) -> Result<(), String> {
 
 // %build block per build-system family.
 fn build_block(m: &VerMeta) -> Result<String, String> {
-    let libsh = tree::lib().join("uapi-stage.sh");
-    let cc = cross_cc();
+    // HOST-INDEPENDENT: both arches use the self-contained vendored cross toolchains, which
+    // bundle their own musl libc + UAPI headers. No host musl-gcc, no host /usr/include copy.
+    let vr = tree::vendor_root();
+    let cc_x86 = vr.join("cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc");
+    let cc_arm = vr.join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc");
+    // SYS = per-arch sysroot where build_requires deps are installed; build against it.
     let preamble = format!(
-        ". {lib}\n\
-         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={cc}; UAPI=\"$(uapi_cflags aarch64)\"; \
-         else CC=musl-gcc; UAPI=\"$(uapi_cflags x86_64)\"; fi\n",
-        lib = libsh.display(), cc = cc);
+        "SYS={topdir}/sysroot/%{{_target_cpu}}\n\
+         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; \
+         else CC={ccx86}; CROSS={px86}; fi\n\
+         UAPI=\"\"\n\
+         export C_INCLUDE_PATH=\"$SYS/usr/include\" CPLUS_INCLUDE_PATH=\"$SYS/usr/include\" LIBRARY_PATH=\"$SYS/usr/lib\"\n",
+        topdir = tree::topdir().display(),
+        ccarm = cc_arm.display(), parm = cc_arm.display().to_string().trim_end_matches("gcc"),
+        ccx86 = cc_x86.display(), px86 = cc_x86.display().to_string().trim_end_matches("gcc"));
     let b = &m.build_args;
     let cf = &m.cflags; // extra per-package CFLAGS (e.g. -std=gnu89)
     let lf = &m.ldflags; // extra per-package LDFLAGS (e.g. -L<dep>/lib for shared deps)
@@ -182,28 +188,36 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              {cache_write}\
              CC=\"$CC\" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD=\"\" \\\n\
              CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
-             CFLAGS=\"-Os -D_GNU_SOURCE {cf} -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
-             LDFLAGS=\"-Wl,-rpath,/usr/lib {lf}\" \\\n\
+             CFLAGS=\"-Os -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
+             LDFLAGS=\"-Wl,-rpath,/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
+             PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\" \\\n\
+             LD_LIBRARY_PATH=\"$SYS/usr/lib\" \\\n\
              ./configure --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
         },
+        // custom build systems (zlib ./configure, openssl ./Configure): build_args is the full
+        // configure+make snippet; CC/CROSS/SYS/UAPI exported. %install uses install_cmd.
+        "script" => format!(
+            "{preamble}\
+             export CC CROSS UAPI\n\
+             export CFLAGS=\"-Os -fPIC {cf} -I$SYS/usr/include $UAPI\"\n\
+             export LDFLAGS=\"-Wl,-rpath,/usr/lib -L$SYS/usr/lib {lf}\"\n\
+             export PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\"\n\
+             {b}\n"),
         "cargo" => format!(
-            // rpm injects CC=gcc + hardening CFLAGS that break musl cross C-dep builds
-            // (jemalloc-sys etc.) — unset so cc-rs uses musl-gcc / the cross toolchain.
+            // host-independent: vendored cross gcc for the Rust link AND cc-rs C deps (onig/jemalloc),
+            // both arches. unset rpm's injected CC/CFLAGS first.
             "unset CC CXX CPP CFLAGS CXXFLAGS CPPFLAGS LDFLAGS\n\
              {cf_export}\
-             if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then \
-               TGT=aarch64-unknown-linux-musl; \
-               export PATH=\"{cross_bin}:$PATH\"; \
-               export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER={cc}; \
-               export CC_aarch64_unknown_linux_musl={cc}; \
-             else TGT=x86_64-unknown-linux-musl; fi\n\
+             if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then TGT=aarch64-unknown-linux-musl; G={ccarm}; \
+             else TGT=x86_64-unknown-linux-musl; G={ccx86}; fi\n\
+             export PATH=\"$(dirname $G):$PATH\"\n\
+             V=$(echo $TGT | tr 'a-z-' 'A-Z_'); export CARGO_TARGET_${{V}}_LINKER=$G\n\
+             export CC_$(echo $TGT | tr - _)=$G\n\
              rustup target add $TGT >/dev/null 2>&1 || true\n\
              RUSTFLAGS=\"-C target-feature=+crt-static\" cargo build --release --target $TGT {b}\n",
-            // cc-rs picks up CFLAGS for C deps (onig_sys etc. need -std for modern gcc C23 default)
             cf_export = if cf.is_empty() { String::new() } else { format!("export CFLAGS=\"{cf}\" CXXFLAGS=\"{cf}\"\n") },
-            cross_bin = Path::new(&cc).parent().map(|p| p.display().to_string()).unwrap_or_default(),
-            cc = cc, b = b),
+            ccarm = cc_arm.display(), ccx86 = cc_x86.display(), b = b),
         "go" => format!(
             // Go cross-compiles natively via GOOS/GOARCH (no cross toolchain); CGO off = static.
             // -o %{{name}} fixes the output path; build_args = the package path (. or ./cmd/x).
@@ -261,9 +275,10 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
     // links/extra binaries (gawk->awk, gzip->gunzip/zcat, coreutils applets, …). %files is
     // auto-generated from whatever actually landed, so nothing upstream ships is dropped.
     // cargo/plain-make: explicit install_map (cargo man/completions are a per-pkg follow-up).
-    let (install, files_section) = if m.build_system == "autotools" {
+    let (install, files_section) = if m.build_system == "autotools" || m.build_system == "script" {
+        let cmd = if m.install_cmd.is_empty() { "make install DESTDIR=%{buildroot} INSTALL='install -p'".to_string() } else { m.install_cmd.clone() };
         let inst = format!(
-            "make install DESTDIR=%{{buildroot}} INSTALL='install -p'\n\
+            "{cmd}\n\
              rm -f %{{buildroot}}%{{_infodir}}/dir\n\
              find %{{buildroot}} -name '*.la' -delete 2>/dev/null || true\n\
              ( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n");
@@ -325,6 +340,23 @@ pub(crate) fn build(conn: &Connection, key: &str, arches: &[String]) -> Result<(
     if !spec.is_file() { return Err(format!("vendorctl: {} missing (run `spec gen {key}`)", spec.display())); }
     let topdir = tree::topdir();
     for arch in arches {
+        // populate the per-arch sysroot with build_requires deps (Fedora: dnf-install
+        // BuildRequires into the mock chroot). Each dep's built RPM is unpacked into the
+        // sysroot so this package's %build finds its headers/libs at $SYS/usr/{include,lib}.
+        for dep in m.build_requires.split_whitespace() {
+            let dm = resolve(conn, dep)?;
+            let dep_rpm = tree::rpms().join(arch).join(format!("{dep}-{}-1.ox1.{arch}.rpm", dm.version));
+            if !dep_rpm.is_file() {
+                return Err(format!("vendorctl: build-dep {dep} not built for {arch} (build it first)"));
+            }
+            let sys = tree::sysroot(arch);
+            fs::create_dir_all(&sys).map_err(|e| format!("vendorctl: mkdir sysroot: {e}"))?;
+            let st = Command::new("sh").arg("-c")
+                .arg(format!("rpm2cpio '{}' | cpio -idmu --quiet -D '{}'", dep_rpm.display(), sys.display()))
+                .status().map_err(|e| format!("vendorctl: sysroot install {dep}: {e}"))?;
+            if !st.success() { return Err(format!("vendorctl: failed to stage {dep} into {arch} sysroot")); }
+            println!("sysroot\t{arch}\t<- {dep} {}", dm.version);
+        }
         // _topdir MUST be a CLI --define (highest precedence, applied before rpm derives
         // _sourcedir/_builddir). --load is too late for build-path macros — sources would
         // resolve under the default ~/rpmbuild. orch.rs is the single source for these.
