@@ -7,7 +7,7 @@ Version:        1.0.0
 Release:        1%{?dist}
 Summary:        sd: sed alternative (oxide)
 License:        MIT
-Source0:        %{name}-%{version}.tar.gz
+Source0:        sd-1.0.0.tar.gz
 
 %description
 sd: sed alternative (oxide)

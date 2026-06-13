@@ -7,7 +7,7 @@ Version:        1.35
 Release:        1%{?dist}
 Summary:        GNU tar (static-musl, oxide)
 License:        GPL-3.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        tar-1.35.tar.xz
 
 %description
 GNU tar (static-musl, oxide)

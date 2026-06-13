@@ -7,7 +7,7 @@ Version:        2.7.6
 Release:        1%{?dist}
 Summary:        GNU patch (static-musl, oxide)
 License:        GPL-3.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        patch-2.7.6.tar.xz
 
 %description
 GNU patch (static-musl, oxide)

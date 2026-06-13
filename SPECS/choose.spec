@@ -7,7 +7,7 @@ Version:        1.3.6
 Release:        1%{?dist}
 Summary:        choose: human cut/awk alternative (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        choose-1.3.6.tar.gz
 
 %description
 choose: human cut/awk alternative (oxide)

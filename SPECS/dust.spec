@@ -7,7 +7,7 @@ Version:        1.1.1
 Release:        1%{?dist}
 Summary:        dust: du alternative (oxide)
 License:        MIT
-Source0:        %{name}-%{version}.tar.gz
+Source0:        dust-1.1.1.tar.gz
 
 %description
 dust: du alternative (oxide)

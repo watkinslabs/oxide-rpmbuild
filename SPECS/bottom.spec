@@ -7,7 +7,7 @@ Version:        0.10.2
 Release:        1%{?dist}
 Summary:        bottom: system monitor (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        bottom-0.10.2.tar.gz
 
 %description
 bottom: system monitor (oxide)

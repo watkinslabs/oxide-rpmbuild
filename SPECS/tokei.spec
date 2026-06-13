@@ -7,7 +7,7 @@ Version:        12.1.2
 Release:        1%{?dist}
 Summary:        tokei: code statistics (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        tokei-12.1.2.tar.gz
 
 %description
 tokei: code statistics (oxide)

@@ -7,7 +7,7 @@ Version:        5.6.3
 Release:        1%{?dist}
 Summary:        XZ Utils (static-musl, oxide)
 License:        0BSD AND GPL-2.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        xz-5.6.3.tar.xz
 
 %description
 XZ Utils (static-musl, oxide)

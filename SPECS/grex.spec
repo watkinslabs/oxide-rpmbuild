@@ -7,7 +7,7 @@ Version:        1.4.5
 Release:        1%{?dist}
 Summary:        grex: regex generator (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        grex-1.4.5.tar.gz
 
 %description
 grex: regex generator (oxide)

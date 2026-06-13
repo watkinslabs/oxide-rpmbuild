@@ -7,7 +7,7 @@ Version:        0.15.0
 Release:        1%{?dist}
 Summary:        hexyl: hex viewer (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        hexyl-0.15.0.tar.gz
 
 %description
 hexyl: hex viewer (oxide)

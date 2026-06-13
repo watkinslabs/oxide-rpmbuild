@@ -7,7 +7,7 @@ Version:        0.24.0
 Release:        1%{?dist}
 Summary:        bat: cat clone with syntax highlighting (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        bat-0.24.0.tar.gz
 
 %description
 bat: cat clone with syntax highlighting (oxide)

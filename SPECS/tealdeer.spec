@@ -7,7 +7,7 @@ Version:        1.7.1
 Release:        1%{?dist}
 Summary:        tealdeer: tldr client (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        tealdeer-1.7.1.tar.gz
 
 %description
 tealdeer: tldr client (oxide)

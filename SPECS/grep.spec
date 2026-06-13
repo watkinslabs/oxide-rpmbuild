@@ -7,7 +7,7 @@ Version:        3.11
 Release:        1%{?dist}
 Summary:        GNU grep (static-musl, oxide)
 License:        GPL-3.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        grep-3.11.tar.xz
 
 %description
 GNU grep (static-musl, oxide)

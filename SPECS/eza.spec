@@ -7,7 +7,7 @@ Version:        0.20.24
 Release:        1%{?dist}
 Summary:        eza: modern ls (oxide)
 License:        MIT
-Source0:        %{name}-%{version}.tar.gz
+Source0:        eza-0.20.24.tar.gz
 
 %description
 eza: modern ls (oxide)

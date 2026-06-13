@@ -7,7 +7,7 @@ Version:        4.10.0
 Release:        1%{?dist}
 Summary:        GNU findutils (static-musl, oxide)
 License:        GPL-3.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        findutils-4.10.0.tar.xz
 
 %description
 GNU findutils (static-musl, oxide)

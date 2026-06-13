@@ -7,7 +7,7 @@ Version:        14.1.1
 Release:        1%{?dist}
 Summary:        ripgrep: recursive grep (oxide)
 License:        MIT OR Unlicense
-Source0:        %{name}-%{version}.tar.gz
+Source0:        ripgrep-14.1.1.tar.gz
 
 %description
 ripgrep: recursive grep (oxide)

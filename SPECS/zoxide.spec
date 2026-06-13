@@ -7,7 +7,7 @@ Version:        0.9.6
 Release:        1%{?dist}
 Summary:        zoxide: smarter cd (oxide)
 License:        MIT
-Source0:        %{name}-%{version}.tar.gz
+Source0:        zoxide-0.9.6.tar.gz
 
 %description
 zoxide: smarter cd (oxide)

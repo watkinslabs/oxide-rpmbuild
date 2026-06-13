@@ -7,7 +7,7 @@ Version:        0.14.10
 Release:        1%{?dist}
 Summary:        procs: ps alternative (oxide)
 License:        MIT
-Source0:        %{name}-%{version}.tar.gz
+Source0:        procs-0.14.10.tar.gz
 
 %description
 procs: ps alternative (oxide)

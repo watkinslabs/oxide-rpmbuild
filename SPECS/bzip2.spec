@@ -8,7 +8,7 @@ Release:        1%{?dist}
 Summary:        Block-sorting file compressor (static-musl, oxide)
 License:        bzip2-1.0.6
 URL:            https://sourceware.org/bzip2/
-Source0:        %{name}-%{version}.tar.gz
+Source0:        bzip2-1.0.8.tar.gz
 
 %description
 Block-sorting file compressor (static-musl, oxide)

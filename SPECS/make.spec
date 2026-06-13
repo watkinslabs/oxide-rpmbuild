@@ -7,7 +7,7 @@ Version:        4.4.1
 Release:        1%{?dist}
 Summary:        GNU make (static-musl, oxide)
 License:        GPL-3.0-or-later
-Source0:        %{name}-%{version}.tar.gz
+Source0:        make-4.4.1.tar.gz
 
 %description
 GNU make (static-musl, oxide)

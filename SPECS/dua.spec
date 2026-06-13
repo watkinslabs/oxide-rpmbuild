@@ -7,7 +7,7 @@ Version:        2.30.1
 Release:        1%{?dist}
 Summary:        dua: disk usage analyzer (oxide)
 License:        MIT
-Source0:        %{name}-%{version}.tar.gz
+Source0:        dua-cli-2.30.1.tar.gz
 
 %description
 dua: disk usage analyzer (oxide)

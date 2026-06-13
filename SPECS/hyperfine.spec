@@ -7,7 +7,7 @@ Version:        1.19.0
 Release:        1%{?dist}
 Summary:        hyperfine: benchmarking tool (oxide)
 License:        MIT OR Apache-2.0
-Source0:        %{name}-%{version}.tar.gz
+Source0:        hyperfine-1.19.0.tar.gz
 
 %description
 hyperfine: benchmarking tool (oxide)

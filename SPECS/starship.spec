@@ -7,7 +7,7 @@ Version:        1.21.1
 Release:        1%{?dist}
 Summary:        starship: shell prompt (oxide)
 License:        ISC
-Source0:        %{name}-%{version}.tar.gz
+Source0:        starship-1.21.1.tar.gz
 
 %description
 starship: shell prompt (oxide)

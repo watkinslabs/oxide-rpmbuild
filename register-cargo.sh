@@ -37,4 +37,8 @@ reg zoxide    0.9.6   "MIT" "zoxide: smarter cd (oxide)";                      b
 reg tealdeer  1.7.1   "MIT OR Apache-2.0" "tealdeer: tldr client (oxide)";     bin tealdeer tldr
 reg yazi      0.4.2   "MIT" "yazi: terminal file manager (oxide)";             bin yazi yazi; bin yazi ya
 
+# onig_sys (oniguruma C dep) has K&R protos that modern gcc's C23 default rejects;
+# pin gnu11 for packages that pull it (bat syntax set, delta/xh/yazi).
+for p in bat delta xh yazi; do $V meta set "$p" --cflags "-std=gnu11" >/dev/null; done
+
 echo "registered cargo cluster"
