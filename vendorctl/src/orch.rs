@@ -193,8 +193,12 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
             cross_bin = Path::new(&cc).parent().map(|p| p.display().to_string()).unwrap_or_default(),
             cc = cc, b = b),
         "go" => format!(
-            "if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then GOARCH=arm64; else GOARCH=amd64; fi\n\
-             CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH go build {b}\n"),
+            // Go cross-compiles natively via GOOS/GOARCH (no cross toolchain); CGO off = static.
+            // -o %{{name}} fixes the output path; build_args = the package path (. or ./cmd/x).
+            "export PATH={gobin}:$PATH\n\
+             if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then GOARCH=arm64; else GOARCH=amd64; fi\n\
+             CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH go build -ldflags='-s -w' -o %{{name}} {b}\n",
+            gobin = tree::vendor_root().join("go/bin").display(), b = b),
         other => return Err(format!("vendorctl: build_system `{other}` not yet templated (plain-make|autotools|cargo|go)")),
     })
 }
