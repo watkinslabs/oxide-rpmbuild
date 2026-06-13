@@ -21,3 +21,12 @@ reg acl          2.3.2    "LGPL-2.1-or-later" "acl -devel (oxide)"         "--en
 reg attr         2.5.2    "LGPL-2.1-or-later" "attr -devel (oxide)"        "--enable-shared --disable-static --disable-nls --disable-rpath" https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.gz attr-2.5.2.tar.gz
 reg kmod         31       "LGPL-2.1-or-later" "kmod -devel (oxide)"        "--enable-shared --disable-static --disable-tools --disable-manpages" https://www.kernel.org/pub/linux/utils/kernel/kmod/kmod-31.tar.xz kmod-31.tar.xz
 echo registered
+
+# ncurses: shared (.so) + acl (dynamic-links shared libattr from vendored attr tree)
+$V pkg add ncurses 2>/dev/null || true; $V ver add --package ncurses --version 6.5 2>/dev/null || true
+$V meta set ncurses --build-system autotools --license "X11" --summary "ncurses shared -devel (oxide)" --cflags "-fPIC" \
+  --build-args "--prefix=/usr --with-shared --without-normal --without-debug --without-ada --without-cxx --without-cxx-binding --without-manpages --without-progs --without-tack --without-tests --enable-pc-files=no --disable-db-install --enable-widec --enable-overwrite --with-default-terminfo-dir=/usr/share/terminfo --with-terminfo-dirs=/etc/terminfo:/lib/terminfo:/usr/share/terminfo" >/dev/null
+$V install clear ncurses 2>/dev/null || true
+$V src add --package ncurses --version 6.5 --url https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz --filename ncurses-6.5.tar.gz 2>/dev/null || true
+ATTR='/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}'
+$V meta set acl --cflags "-fPIC -I$ATTR/include" --ldflags "-L$ATTR/lib" >/dev/null

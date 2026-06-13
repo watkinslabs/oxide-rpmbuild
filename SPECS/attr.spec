@@ -23,7 +23,7 @@ find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
 CFLAGS="-Os -D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
-LDFLAGS="-static" \
+LDFLAGS="-Wl,-rpath,/usr/lib " \
 ./configure --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
 make %{?_smp_mflags}
 

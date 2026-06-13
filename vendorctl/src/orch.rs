@@ -18,6 +18,7 @@ pub(crate) struct VerMeta {
     pub build_args: String,
     pub cflags: String,
     pub config_cache: String,
+    pub ldflags: String,
 }
 
 pub(crate) struct Install {
@@ -31,13 +32,13 @@ pub(crate) struct Install {
 // Resolve the build-target version (most recently added) for a package.
 pub(crate) fn resolve(conn: &Connection, key: &str) -> Result<VerMeta, String> {
     conn.query_row(
-        "SELECT id, version, build_system, summary, license, upstream_url, src_subdir, build_args, cflags, config_cache \
+        "SELECT id, version, build_system, summary, license, upstream_url, src_subdir, build_args, cflags, config_cache, ldflags \
          FROM package_versions WHERE package_key=?1 ORDER BY id DESC LIMIT 1",
         params![key],
         |r| Ok(VerMeta {
             id: r.get(0)?, version: r.get(1)?, build_system: r.get(2)?, summary: r.get(3)?,
             license: r.get(4)?, upstream_url: r.get(5)?, src_subdir: r.get(6)?, build_args: r.get(7)?,
-            cflags: r.get(8)?, config_cache: r.get(9)?,
+            cflags: r.get(8)?, config_cache: r.get(9)?, ldflags: r.get(10)?,
         }),
     )
     .optional()
@@ -164,6 +165,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
         lib = libsh.display(), cc = cc);
     let b = &m.build_args;
     let cf = &m.cflags; // extra per-package CFLAGS (e.g. -std=gnu89)
+    let lf = &m.ldflags; // extra per-package LDFLAGS (e.g. -L<dep>/lib for shared deps)
     Ok(match m.build_system.as_str() {
         "plain-make" => format!("{preamble}export CC UAPI\nOXIDE_CFLAGS=\"{cf}\"; export OXIDE_CFLAGS\n{b}\n"),
         "autotools" => {
@@ -181,7 +183,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              CC=\"$CC\" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD=\"\" \\\n\
              CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
              CFLAGS=\"-Os -D_GNU_SOURCE {cf} -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
-             LDFLAGS=\"-static\" \\\n\
+             LDFLAGS=\"-Wl,-rpath,/usr/lib {lf}\" \\\n\
              ./configure --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
         },

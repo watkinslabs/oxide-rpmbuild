@@ -27,9 +27,9 @@ ac_cv_have_decl_error_at_line=no
 ac_cv_func_error=no
 OXEOF
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
-CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
-CFLAGS="-Os -D_GNU_SOURCE -DO_BINARY=0 -DO_TEXT=0 -DS_IXUGO='(S_IXUSR|S_IXGRP|S_IXOTH)' -DS_IRWXUGO='(S_IRWXU|S_IRWXG|S_IRWXO)' -DSYS_getdents=SYS_getdents64 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
-LDFLAGS="-static" \
+CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
+CFLAGS="-Os -D_GNU_SOURCE -DO_BINARY=0 -DO_TEXT=0 -DS_IXUGO='(S_IXUSR|S_IXGRP|S_IXOTH)' -DS_IRWXUGO='(S_IRWXU|S_IRWXG|S_IRWXO)' -DSYS_getdents=SYS_getdents64 -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+LDFLAGS="-Wl,-rpath,/usr/lib " \
 ./configure --host=%{_target_cpu}-linux-musl --cache-file=config.cache --enable-single-binary=symlinks --enable-no-install-program=stdbuf,arch,hostname --disable-nls --disable-libsmack --disable-libcap --disable-acl --disable-xattr --without-selinux --without-openssl --prefix=/usr
 make %{?_smp_mflags}
 

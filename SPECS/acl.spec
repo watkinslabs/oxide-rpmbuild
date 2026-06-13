@@ -22,8 +22,8 @@ if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
 CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -I/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}/include -L/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}/lib -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
-LDFLAGS="-static" \
+CFLAGS="-Os -D_GNU_SOURCE -fPIC -I/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+LDFLAGS="-Wl,-rpath,/usr/lib -L/home/nd/oxide/oxide2/vendor/attr/install-%{_target_cpu}/lib" \
 ./configure --host=%{_target_cpu}-linux-musl --prefix=/usr --enable-shared --disable-static --disable-nls --disable-rpath
 make %{?_smp_mflags}
 

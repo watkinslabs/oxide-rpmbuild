@@ -21,10 +21,10 @@ if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/
 [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
 find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 CC="$CC" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD="" \
-CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
-CFLAGS="-Os -D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types $UAPI" \
-LDFLAGS="-static" \
-./configure --host=%{_target_cpu}-linux-musl --prefix=/usr --without-shared --with-normal --without-debug --without-ada --without-cxx --without-cxx-binding --without-manpages --without-progs --without-tack --without-tests --enable-pc-files=no --disable-db-install --enable-widec --enable-overwrite --with-default-terminfo-dir=/usr/share/terminfo --with-terminfo-dirs=/etc/terminfo:/lib/terminfo:/usr/share/terminfo
+CFLAGS_FOR_BUILD="-D_GNU_SOURCE -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion" \
+CFLAGS="-Os -D_GNU_SOURCE -fPIC -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI" \
+LDFLAGS="-Wl,-rpath,/usr/lib " \
+./configure --host=%{_target_cpu}-linux-musl --prefix=/usr --with-shared --without-normal --without-debug --without-ada --without-cxx --without-cxx-binding --without-manpages --without-progs --without-tack --without-tests --enable-pc-files=no --disable-db-install --enable-widec --enable-overwrite --with-default-terminfo-dir=/usr/share/terminfo --with-terminfo-dirs=/etc/terminfo:/lib/terminfo:/usr/share/terminfo
 make %{?_smp_mflags}
 
 %install

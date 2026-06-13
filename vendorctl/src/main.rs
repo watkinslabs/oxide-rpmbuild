@@ -84,6 +84,7 @@ fn cmd_meta(conn: &Connection, args: &[String]) -> Result<(), String> {
         ("build_args", parse_flag(args, "--build-args")),
         ("cflags", parse_flag(args, "--cflags")),
         ("config_cache", parse_flag(args, "--config-cache")),
+        ("ldflags", parse_flag(args, "--ldflags")),
     ];
     for (col, val) in upd {
         if let Some(v) = val {
