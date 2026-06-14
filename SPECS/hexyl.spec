@@ -17,7 +17,7 @@ hexyl: hex viewer (oxide)
 
 %build
 unset CC CXX CPP CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
-if [ "%{_target_cpu}" = "aarch64" ]; then TGT=aarch64-unknown-linux-musl; G=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; else TGT=x86_64-unknown-linux-musl; G=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then TGT=aarch64-unknown-linux-musl; G=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-oxide-gcc; else TGT=x86_64-unknown-linux-musl; G=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-oxide-gcc; fi
 export PATH="$(dirname $G):$PATH"
 V=$(echo $TGT | tr 'a-z-' 'A-Z_'); export CARGO_TARGET_${V}_LINKER=$G
 export CC_$(echo $TGT | tr - _)=$G

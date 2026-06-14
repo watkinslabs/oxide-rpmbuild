@@ -5,7 +5,7 @@ use crate::tree;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Group enabled packages into dependency WAVES (Kahn's, level by level): wave[0] = packages
@@ -302,6 +302,18 @@ pub(crate) fn source_for(conn: &Connection, ver_id: i64) -> Result<Option<Src>, 
     ).optional().map_err(|e| format!("vendorctl: query source: {e}"))
 }
 
+// All sources for a version, ordered (id). [0] = Source0 (the main tarball, %setup'd);
+// [1..] = Source1.. = secondary tarballs (e.g. perl-cross), extracted in %prep over the tree.
+pub(crate) fn sources_for(conn: &Connection, ver_id: i64) -> Result<Vec<Src>, String> {
+    let mut st = conn.prepare("SELECT canonical_url, filename, checksum_value FROM sources WHERE package_version_id=?1 ORDER BY id")
+        .map_err(|e| format!("vendorctl: prepare sources: {e}"))?;
+    let rows = st.query_map(params![ver_id], |r| Ok(Src { url: r.get(0)?, filename: r.get(1)?, checksum: r.get(2)? }))
+        .map_err(|e| format!("vendorctl: query sources: {e}"))?;
+    let mut v = Vec::new();
+    for r in rows { v.push(r.map_err(|e| format!("vendorctl: source row: {e}"))?); }
+    Ok(v)
+}
+
 fn sha256_of(path: &Path) -> Result<String, String> {
     let out = Command::new("sha256sum").arg(path).output().map_err(|e| format!("vendorctl: sha256sum: {e}"))?;
     Ok(String::from_utf8_lossy(&out.stdout).split_whitespace().next().unwrap_or("").to_string())
@@ -311,23 +323,27 @@ fn sha256_of(path: &Path) -> Result<String, String> {
 // Enables distributed builds — a fresh instance needs only the repo + network, no local vendor tree.
 pub(crate) fn fetch(conn: &Connection, key: &str) -> Result<(), String> {
     let m = resolve(conn, key)?;
-    let s = source_for(conn, m.id)?.filter(|s| !s.url.is_empty())
-        .ok_or_else(|| format!("vendorctl: no source URL for {key} (add with `src add --url ...`)"))?;
-    let fname = if s.filename.is_empty() { format!("{key}-{}.tar.gz", m.version) } else { s.filename.clone() };
+    let srcs: Vec<Src> = sources_for(conn, m.id)?.into_iter().filter(|s| !s.url.is_empty()).collect();
+    if srcs.is_empty() { return Err(format!("vendorctl: no source URL for {key} (add with `src add --url ...`)")); }
     fs::create_dir_all(tree::sources()).map_err(|e| format!("vendorctl: mkdir SOURCES: {e}"))?;
-    let out = tree::sources().join(&fname);
-    let st = Command::new("curl").args(["-fsSL", "--retry", "3", "-o", out.to_str().unwrap(), &s.url])
-        .status().map_err(|e| format!("vendorctl: curl: {e}"))?;
-    if !st.success() { return Err(format!("vendorctl: download failed: {}", s.url)); }
-    let sha = sha256_of(&out)?;
-    if s.checksum.is_empty() {
-        conn.execute("UPDATE sources SET checksum_value=?1, checksum_type='sha256' WHERE package_version_id=?2 AND canonical_url=?3",
-            params![sha, m.id, s.url]).map_err(|e| format!("vendorctl: record checksum: {e}"))?;
-        println!("fetched\t{}\tsha256:{sha} (recorded)", out.display());
-    } else if s.checksum != sha {
-        return Err(format!("vendorctl: CHECKSUM MISMATCH for {key}: expected {} got {sha}", s.checksum));
-    } else {
-        println!("fetched\t{}\tsha256 verified", out.display());
+    for (i, s) in srcs.iter().enumerate() {
+        let fname = if s.filename.is_empty() {
+            if i == 0 { format!("{key}-{}.tar.gz", m.version) } else { s.url.rsplit('/').next().unwrap_or("source").to_string() }
+        } else { s.filename.clone() };
+        let out = tree::sources().join(&fname);
+        let st = Command::new("curl").args(["-fsSL", "--retry", "3", "-o", out.to_str().unwrap(), &s.url])
+            .status().map_err(|e| format!("vendorctl: curl: {e}"))?;
+        if !st.success() { return Err(format!("vendorctl: download failed: {}", s.url)); }
+        let sha = sha256_of(&out)?;
+        if s.checksum.is_empty() {
+            conn.execute("UPDATE sources SET checksum_value=?1, checksum_type='sha256' WHERE package_version_id=?2 AND canonical_url=?3",
+                params![sha, m.id, s.url]).map_err(|e| format!("vendorctl: record checksum: {e}"))?;
+            println!("fetched\t{}\tsha256:{sha} (recorded)", out.display());
+        } else if s.checksum != sha {
+            return Err(format!("vendorctl: CHECKSUM MISMATCH for {key}: expected {} got {sha}", s.checksum));
+        } else {
+            println!("fetched\t{}\tsha256 verified", out.display());
+        }
     }
     Ok(())
 }
@@ -352,50 +368,71 @@ fn sign_rpm(path: &Path) -> Result<(), String> {
 }
 
 // Toolchain env for %install — install steps may relink/recompile (libtool, make-based
-// `make install`), so they need CC/CROSS + toolchain + sysroot bin on PATH, and rpm's
-// injected CFLAGS neutralized (else host gcc gets target hardening flags). %install does
-// NOT run the %build preamble, so set it here too.
+// `make install`), so they need CC/CROSS + toolchain on PATH, and rpm's injected CFLAGS
+// neutralized (else host gcc gets target hardening flags). %install does NOT run the
+// %build preamble, so set it here too.
+//
+// THREE TOOL DOMAINS — never let them mix (HARD RULE; the cause of nasty host/target bugs):
+//   1. host build tools (run during build): host gcc/as/ld/make — from the inherited $PATH.
+//   2. cross toolchain (run on host, emit target): $TCBIN (Bootlin $TRIPLE-* + oxide-gcc).
+//   3. target sysroot $SYS: headers (-I) + libs (-L) + .pc ONLY — its /usr/bin holds TARGET
+//      (musl) binaries that CANNOT run on the host. So PATH = $TCBIN:$PATH:$SYS/usr/bin —
+//      cross + host always win; $SYS/usr/bin is LAST, reachable only for arch-independent
+//      *-config shell scripts (gpgrt-config, …). A target ELF must never shadow a host tool.
 fn tc_path_export() -> String {
-    let vr = tree::vendor_root();
-    let ccarm = vr.join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc");
-    let ccx86 = vr.join("cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc");
+    let (x86bin, armbin) = (tc_bin(ARCH_X86), tc_bin(ARCH_ARM));
     format!(
         "SYS={topdir}/sysroot/%{{name}}/%{{_target_cpu}}\n\
-         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
-         else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
-         export CC CROSS PATH=\"$SYS/usr/bin:$TCBIN:$PATH\"\n\
+         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={armbin}/{TRIPLE_ARM}-oxide-gcc; CROSS={armbin}/{TRIPLE_ARM}-; TCBIN={armbin}; TCSYS={armsys}; \
+         else CC={x86bin}/{TRIPLE_X86}-oxide-gcc; CROSS={x86bin}/{TRIPLE_X86}-; TCBIN={x86bin}; TCSYS={x86sys}; fi\n\
+         export CC CROSS TCSYS PATH=\"$TCBIN:$PATH:$SYS/usr/bin\"\n\
          unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS\n",
         topdir = tree::topdir().display(),
-        ccarm = ccarm.display(), parm = ccarm.display().to_string().trim_end_matches("gcc"),
-        armbin = ccarm.parent().unwrap().display(),
-        ccx86 = ccx86.display(), px86 = ccx86.display().to_string().trim_end_matches("gcc"),
-        x86bin = ccx86.parent().unwrap().display())
+        armbin = armbin.display(), x86bin = x86bin.display(),
+        armsys = tc_sysroot(ARCH_ARM, TRIPLE_ARM).display(), x86sys = tc_sysroot(ARCH_X86, TRIPLE_X86).display())
 }
+
+// Toolchain sysroot (musl headers + libc.a/.so + crt*.o + kernel UAPI headers) for a triple.
+fn tc_sysroot(tcdir: &str, triple: &str) -> PathBuf {
+    tree::vendor_root().join("cross").join(tcdir).join(triple).join("sysroot")
+}
+
+// Vendored Bootlin cross-toolchains (gcc 14.3 / musl 1.2.5 with statx). Self-contained:
+// own musl libc + UAPI headers. CC is the `-oxide-` re-exec wrapper (poison check bypassed).
+const ARCH_X86: &str = "x86-64--musl--stable-2025.08-1";
+const ARCH_ARM: &str = "aarch64--musl--stable-2025.08-1";
+const TRIPLE_X86: &str = "x86_64-buildroot-linux-musl";
+const TRIPLE_ARM: &str = "aarch64-buildroot-linux-musl";
+fn tc_bin(tcdir: &str) -> PathBuf { tree::vendor_root().join("cross").join(tcdir).join("bin") }
 
 // %build block per build-system family.
 fn build_block(m: &VerMeta) -> Result<String, String> {
     // HOST-INDEPENDENT: both arches use the self-contained vendored cross toolchains, which
     // bundle their own musl libc + UAPI headers. No host musl-gcc, no host /usr/include copy.
-    let vr = tree::vendor_root();
-    let cc_x86 = vr.join("cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc");
-    let cc_arm = vr.join("cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc");
+    let (x86bin, armbin) = (tc_bin(ARCH_X86), tc_bin(ARCH_ARM));
+    // CC = oxide re-exec wrapper (buildroot poison check bypassed); CROSS/TRIPLE = real triple.
+    let cc_x86 = format!("{}/{TRIPLE_X86}-oxide-gcc", x86bin.display());
+    let cc_arm = format!("{}/{TRIPLE_ARM}-oxide-gcc", armbin.display());
     // SYS = per-arch sysroot where build_requires deps are installed; build against it.
     let preamble = format!(
         "SYS={topdir}/sysroot/%{{name}}/%{{_target_cpu}}\n\
-         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CROSS={parm}; TCBIN={armbin}; \
-         else CC={ccx86}; CROSS={px86}; TCBIN={x86bin}; fi\n\
+         if [ \"%{{_target_cpu}}\" = \"aarch64\" ]; then CC={ccarm}; CXX={cxxarm}; CROSS={armbin}/{TRIPLE_ARM}-; TCBIN={armbin}; TRIPLE={TRIPLE_ARM}; TCSYS={armsys}; \
+         else CC={ccx86}; CXX={cxxx86}; CROSS={x86bin}/{TRIPLE_X86}-; TCBIN={x86bin}; TRIPLE={TRIPLE_X86}; TCSYS={x86sys}; fi\n\
          UAPI=\"\"\n\
-         export PATH=\"$SYS/usr/bin:$TCBIN:$PATH\"\n\
-         export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX=\"${{CROSS}}g++\"\n",
+         export TCSYS PATH=\"$TCBIN:$PATH:$SYS/usr/bin\"\n\
+         export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX\n\
+         unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS\n",
         topdir = tree::topdir().display(),
-        ccarm = cc_arm.display(), parm = cc_arm.display().to_string().trim_end_matches("gcc"),
-        armbin = cc_arm.parent().unwrap().display(),
-        ccx86 = cc_x86.display(), px86 = cc_x86.display().to_string().trim_end_matches("gcc"),
-        x86bin = cc_x86.parent().unwrap().display());
+        ccarm = cc_arm, cxxarm = format!("{}/{TRIPLE_ARM}-oxide-g++", armbin.display()),
+        ccx86 = cc_x86, cxxx86 = format!("{}/{TRIPLE_X86}-oxide-g++", x86bin.display()),
+        armbin = armbin.display(), x86bin = x86bin.display(),
+        armsys = tc_sysroot(ARCH_ARM, TRIPLE_ARM).display(), x86sys = tc_sysroot(ARCH_X86, TRIPLE_X86).display());
     let b = &m.build_args;
     let cf = &m.cflags; // extra per-package CFLAGS (e.g. -std=gnu89)
     let lf = &m.ldflags; // extra per-package LDFLAGS (e.g. -L<dep>/lib for shared deps)
     Ok(match m.build_system.as_str() {
+        // file-staging package: no compile; %install (gen_spec) does the file copy.
+        "stage" => String::new(),
         "plain-make" => format!("{preamble}export CC UAPI\nOXIDE_CFLAGS=\"{cf}\"; export OXIDE_CFLAGS\n{b}\n"),
         "autotools" => {
             // cross config.cache: answers for configure tests that must RUN a target binary.
@@ -407,24 +444,25 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
             format!(
             "{preamble}\
              [ -f Makefile ] && make distclean >/dev/null 2>&1 || true\n\
-             find . \\( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \\) -delete 2>/dev/null || true\n\
              {cache_write}\
              CC=\"$CC\" CC_FOR_BUILD=gcc LDFLAGS_FOR_BUILD=\"\" \\\n\
              CFLAGS_FOR_BUILD=\"-D_GNU_SOURCE {cf} -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion\" \\\n\
-             CFLAGS=\"-Os -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
-             LDFLAGS=\"-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
-             PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\" \\\n\
-             ./configure --build=x86_64-pc-linux-gnu --host=%{{_target_cpu}}-linux-musl {cache_flag}{b}\n\
+             CFLAGS=\"-Os -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-poison-system-directories -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion $UAPI\" \\\n\
+             LDFLAGS=\"-Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\" \\\n\
+             PKG_CONFIG_LIBDIR=\"$SYS/usr/lib/pkgconfig\" PKG_CONFIG_SYSROOT_DIR=\"$SYS\" PKG_CONFIG_PATH=\"\" \\\n\
+             ./configure --build=x86_64-pc-linux-gnu --host=$TRIPLE {cache_flag}{b}\n\
              make %{{?_smp_mflags}}\n")
         },
         // custom build systems (zlib ./configure, openssl ./Configure): build_args is the full
         // configure+make snippet; CC/CROSS/SYS/UAPI exported. %install uses install_cmd.
         "script" => format!(
             "{preamble}\
+             [ -f Makefile ] && make distclean >/dev/null 2>&1 || true\n\
              export CC CROSS UAPI\n\
-             export CFLAGS=\"-Os -fPIC {cf} -I$SYS/usr/include $UAPI\"\n\
-             export LDFLAGS=\"-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\"\n\
-             export PKG_CONFIG_PATH=\"$SYS/usr/lib/pkgconfig\"\n\
+             export CFLAGS=\"-Os -fPIC -D_GNU_SOURCE {cf} -I$SYS/usr/include -Wno-poison-system-directories $UAPI\"\n\
+             export LDFLAGS=\"-Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib {lf}\"\n\
+             unset PKG_CONFIG_PATH\n\
+             export PKG_CONFIG_LIBDIR=\"$SYS/usr/lib/pkgconfig\" PKG_CONFIG_SYSROOT_DIR=\"$SYS\"\n\
              {b}\n"),
         "cargo" => format!(
             // host-independent: vendored cross gcc for the Rust link AND cc-rs C deps (onig/jemalloc),
@@ -439,7 +477,7 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              rustup target add $TGT >/dev/null 2>&1 || true\n\
              RUSTFLAGS=\"-C target-feature=+crt-static\" cargo build --release --target $TGT {b}\n",
             cf_export = if cf.is_empty() { String::new() } else { format!("export CFLAGS=\"{cf}\" CXXFLAGS=\"{cf}\"\n") },
-            ccarm = cc_arm.display(), ccx86 = cc_x86.display(), b = b),
+            ccarm = cc_arm, ccx86 = cc_x86, b = b),
         // meson: generate a cross-file from the vendored toolchain + sysroot, then meson+ninja.
         "meson" => format!(
             "{preamble}\
@@ -457,8 +495,8 @@ fn build_block(m: &VerMeta) -> Result<String, String> {
              cpu = '%{{_target_cpu}}'\n\
              endian = 'little'\n\
              [built-in options]\n\
-             c_args = ['-I$SYS/usr/include']\n\
-             c_link_args = ['-L$SYS/usr/lib', '-Wl,-rpath,/usr/lib', '-Wl,-rpath-link,$SYS/usr/lib']\n\
+             c_args = ['-I$SYS/usr/include', '-Wno-poison-system-directories']\n\
+             c_link_args = ['-L$SYS/usr/lib', '-Wl,-rpath-link,$SYS/usr/lib']\n\
              [properties]\n\
              sys_root = '$SYS'\n\
              pkg_config_libdir = ['$SYS/usr/lib/pkgconfig']\n\
@@ -523,7 +561,17 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
     // links/extra binaries (gawk->awk, gzip->gunzip/zcat, coreutils applets, …). %files is
     // auto-generated from whatever actually landed, so nothing upstream ships is dropped.
     // cargo/plain-make: explicit install_map (cargo man/completions are a per-pkg follow-up).
-    let (install, files_section) = if m.build_system == "autotools" || m.build_system == "script" || m.build_system == "meson" {
+    let (install, files_section) = if m.build_system == "stage" {
+        // file-staging package: no source/compile — install_cmd copies a declared fileset
+        // (headers/libc/crt from $TCSYS, etc.) into %{buildroot}. tc_path_export exposes
+        // SYS/CC/CROSS/TCSYS. Auto-filelist packages exactly what landed.
+        if m.install_cmd.is_empty() { return Err(format!("vendorctl: stage pkg {key} needs --install-cmd")); }
+        let inst = format!(
+            "{pathexp}{cmd}\n\
+             ( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.\\(.*\\)#\"\\1\"#' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n",
+            pathexp = tc_path_export(), cmd = m.install_cmd);
+        (inst, format!("%files -f %{{_builddir}}/{key}.files"))
+    } else if m.build_system == "autotools" || m.build_system == "script" || m.build_system == "meson" {
         let default_install = if m.build_system == "meson" { "DESTDIR=%{buildroot} ninja -C _b install" } else { "make install DESTDIR=%{buildroot} INSTALL='install -p'" };
         let cmd = if m.install_cmd.is_empty() { default_install.to_string() } else { m.install_cmd.clone() };
         let pathexp = tc_path_export();
@@ -531,7 +579,7 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
             "{pathexp}{cmd}\n\
              rm -f %{{buildroot}}%{{_infodir}}/dir\n\
              find %{{buildroot}} -name '*.la' -delete 2>/dev/null || true\n\
-             ( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n");
+             ( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.\\(.*\\)#\"\\1\"#' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n");
         (inst, format!("%files -f %{{_builddir}}/{key}.files"))
     } else {
         if items.is_empty() { return Err(format!("vendorctl: no install_map for {key} (add with `install add`)")); }
@@ -541,20 +589,38 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
         if m.build_system == "cargo" { inst.push_str(CARGO_EXTRAS); }
         // auto-filelist: package exactly what landed in buildroot (bins, links, man, completions).
         inst.push_str(&format!(
-            "( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.##' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n"));
+            "( cd %{{buildroot}} && find . -type f -o -type l ) | sed 's#^\\.\\(.*\\)#\"\\1\"#' | LC_ALL=C sort > %{{_builddir}}/{key}.files\n"));
         (inst, format!("%files -f %{{_builddir}}/{key}.files"))
     };
-    // Source0 = upstream tarball filename if a source URL is registered (rpm %setup handles
-    // any compression); else the local-stage default. %setup -n still pins the unpacked dir.
-    let src0 = match source_for(conn, m.id)? {
-        Some(s) if !s.filename.is_empty() => s.filename,
-        _ => format!("{key}-{}.tar.gz", m.version),
+    // stage family has no upstream source. Otherwise Source0 = registered tarball filename
+    // (rpm %setup handles any compression) or the local-stage default <key>-<ver>.tar.gz.
+    let stage = m.build_system == "stage";
+    // Source0 = main tarball (%setup'd); Source1.. = secondary tarballs (e.g. perl-cross),
+    // extracted over the unpacked tree in %prep so build_args can overlay/use them.
+    let srcs = sources_for(conn, m.id)?;
+    let src_name = |i: usize, s: &Src| -> String {
+        if !s.filename.is_empty() { s.filename.clone() }
+        else if i == 0 { format!("{key}-{}.tar.gz", m.version) }
+        else { s.url.rsplit('/').next().unwrap_or("source").to_string() }
     };
     let summary = if m.summary.is_empty() { format!("{key} (static-musl, oxide)") } else { m.summary.clone() };
     let license = if m.license.is_empty() { "Unknown".into() } else { m.license.clone() };
     let url = if m.upstream_url.is_empty() { String::new() } else { format!("URL:            {}\n", m.upstream_url) };
     // -n names the unpacked dir explicitly (handles src dirs != %{name}-%{version}, e.g. dua-cli-*).
-    let prep = format!("%setup -q -n {}", src_subdir(&m, key));
+    let (source_line, prep) = if stage {
+        (String::new(), String::new())
+    } else {
+        let src0 = if srcs.is_empty() { format!("{key}-{}.tar.gz", m.version) } else { src_name(0, &srcs[0]) };
+        let mut sl = format!("Source0:        {src0}\n");
+        let mut pr = format!("%setup -q -n {}\n", src_subdir(&m, key));
+        for (i, s) in srcs.iter().enumerate().skip(1) {
+            let fn_ = src_name(i, s);
+            sl.push_str(&format!("Source{i}:        {fn_}\n"));
+            // extract secondary tarball into the unpacked tree (CWD after %setup)
+            pr.push_str(&format!("tar -xf %{{_sourcedir}}/{fn_}\n"));
+        }
+        (sl, pr)
+    };
     let spec = format!(
         "# Generated by vendorctl. build-system: {bs}. Do not hand-edit; edit catalog + regen.\n\
          %global debug_package %{{nil}}\n\
@@ -565,7 +631,7 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
          Summary:        {summary}\n\
          License:        {license}\n\
          {url}\
-         Source0:        {src0}\n\n\
+         {source_line}\n\
          %description\n{summary}\n\n\
          %prep\n{prep}\n\n\
          %build\n{build}\n\
@@ -575,7 +641,7 @@ pub(crate) fn gen_spec(conn: &Connection, key: &str) -> Result<(), String> {
          * Sat Jun 13 2026 Chris Watkins <chris@watkinslabs.com> - {ver}-1\n\
          - Generated oxide spec ({bs} family).\n",
         bs = m.build_system, key = key, ver = m.version, summary = summary, license = license,
-        url = url, src0 = src0, prep = prep, build = build_block(&m)?, install = install, files_section = files_section);
+        url = url, source_line = source_line, prep = prep, build = build_block(&m)?, install = install, files_section = files_section);
     fs::create_dir_all(tree::specs()).map_err(|e| format!("vendorctl: mkdir SPECS: {e}"))?;
     let path = tree::specs().join(format!("{key}.spec"));
     fs::write(&path, spec).map_err(|e| format!("vendorctl: write {}: {e}", path.display()))?;

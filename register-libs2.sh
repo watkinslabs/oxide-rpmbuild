@@ -6,7 +6,7 @@ at(){ $V pkg add "$1" 2>/dev/null||true; $V ver add --package "$1" --version "$2
 mk(){ $V pkg add "$1" 2>/dev/null||true; $V ver add --package "$1" --version "$2" 2>/dev/null||true
   $V meta set "$1" --build-system script --license "$3" --summary "$4 (oxide)" --build-args "$5" --install-cmd "$6" >/dev/null
   $V install clear "$1" 2>/dev/null||true; $V src add --package "$1" --version "$2" --url "$7" --filename "$8" 2>/dev/null||true; }
-at libidn2 2.3.7 "LGPL-3.0-or-later" libidn2 libunistring "--prefix=/usr --enable-shared --disable-static --disable-doc --disable-nls --disable-rpath --with-libunistring-prefix=\$SYS/usr" https://ftp.gnu.org/gnu/libidn/libidn2-2.3.7.tar.gz libidn2-2.3.7.tar.gz
+at libidn2 2.3.7 "LGPL-3.0-or-later" libidn2 libunistring "--prefix=/usr --enable-shared --disable-static --disable-doc --disable-nls --disable-rpath --with-libunistring-prefix=\$SYS/usr" https://mirrors.kernel.org/gnu/libidn/libidn2-2.3.7.tar.gz libidn2-2.3.7.tar.gz
 $V meta set libidn2 --ldflags "-lunistring" >/dev/null
 at libgcrypt 1.10.3 "LGPL-2.1-or-later" libgcrypt libgpg-error "--prefix=/usr --enable-shared --disable-static --disable-doc --disable-asm --with-libgpg-error-prefix=\$SYS/usr" https://www.gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.10.3.tar.bz2 libgcrypt-1.10.3.tar.bz2
 at libevent 2.1.12 "BSD-3-Clause" libevent "" "--prefix=/usr --enable-shared --disable-static --disable-openssl --disable-samples --disable-debug-mode" https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz libevent-2.1.12.tar.gz

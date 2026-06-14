@@ -17,11 +17,11 @@ Block-sorting file compressor (static-musl, oxide)
 %setup -q -n bzip2-1.0.8
 
 %build
-SYS=/home/nd/oxide/rpmbuild/sysroot/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
+SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-oxide-gcc; CXX=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-oxide-g++; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin; TRIPLE=aarch64-buildroot-linux-musl; else CC=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-oxide-gcc; CXX=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-oxide-g++; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin; TRIPLE=x86_64-buildroot-linux-musl; fi
 UAPI=""
-export PATH="$TCBIN:$PATH"
-export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
+export PATH="$SYS/usr/bin:$TCBIN:$PATH"
+export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX
 export CC UAPI
 OXIDE_CFLAGS=""; export OXIDE_CFLAGS
 for s in blocksort huffman crctable randtable compress decompress bzlib; do "$CC" -c -Os -D_FILE_OFFSET_BITS=64 "$s.c"; done

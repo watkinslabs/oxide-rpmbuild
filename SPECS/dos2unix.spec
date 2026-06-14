@@ -17,19 +17,22 @@ dos2unix (oxide)
 
 %build
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-oxide-gcc; CXX=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-oxide-g++; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin; TRIPLE=aarch64-buildroot-linux-musl; else CC=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-oxide-gcc; CXX=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-oxide-g++; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin; TRIPLE=x86_64-buildroot-linux-musl; fi
 UAPI=""
 export PATH="$SYS/usr/bin:$TCBIN:$PATH"
-export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX="${CROSS}g++"
+export CC_FOR_BUILD=gcc BUILD_CC=gcc CXX
+[ -f Makefile ] && make distclean >/dev/null 2>&1 || true
+find . \( -name '*.o' -o -name '*.a' -o -name '*.lo' -o -name '*.la' \) -delete 2>/dev/null || true
 export CC CROSS UAPI
-export CFLAGS="-Os -fPIC  -I$SYS/usr/include $UAPI"
-export LDFLAGS="-Wl,-rpath,/usr/lib -Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib "
-export PKG_CONFIG_PATH="$SYS/usr/lib/pkgconfig"
+export CFLAGS="-Os -fPIC  -I$SYS/usr/include -Wno-poison-system-directories $UAPI"
+export LDFLAGS="-Wl,-rpath-link,$SYS/usr/lib -L$SYS/usr/lib "
+unset PKG_CONFIG_PATH
+export PKG_CONFIG_LIBDIR="$SYS/usr/lib/pkgconfig" PKG_CONFIG_SYSROOT_DIR="$SYS"
 make CC="$CC" ENABLE_NLS= prefix=/usr %{?_smp_mflags}
 
 %install
 SYS=/home/nd/oxide/rpmbuild/sysroot/%{name}/%{_target_cpu}
-if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64-linux-musl-cross/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86_64-linux-musl-cross/bin; fi
+if [ "%{_target_cpu}" = "aarch64" ]; then CC=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-oxide-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin/aarch64-buildroot-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/aarch64--musl--stable-2025.08-1/bin; else CC=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-oxide-gcc; CROSS=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin/x86_64-buildroot-linux-musl-; TCBIN=/home/nd/oxide/oxide2/vendor/cross/x86-64--musl--stable-2025.08-1/bin; fi
 export CC CROSS PATH="$SYS/usr/bin:$TCBIN:$PATH"
 unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 make install prefix=/usr DESTDIR=%{buildroot} ENABLE_NLS=

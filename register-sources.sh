@@ -9,7 +9,7 @@ V=./vendorctl/target/debug/vendorctl
 add() { $V src add --package "$1" --version "$2" --url "$3" --filename "$4" 2>/dev/null || \
         $V src update --package "$1" --version "$2" --old-url "$3" --url "$3" --filename "$4" >/dev/null; }
 
-GNU=https://ftp.gnu.org/gnu
+GNU=https://mirrors.kernel.org/gnu
 add sed       4.9      $GNU/sed/sed-4.9.tar.xz                 sed-4.9.tar.xz
 add grep      3.11     $GNU/grep/grep-3.11.tar.xz             grep-3.11.tar.xz
 add tar       1.35     $GNU/tar/tar-1.35.tar.xz               tar-1.35.tar.xz
